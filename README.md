@@ -1,5 +1,9 @@
 # Miracle Boot Fixer v16.9
 
+Future enhancements: 
+https://chatgpt.com/c/69599730-f6c4-8329-8404-ad7ee9f78b71
+
+
 A surgical Windows boot repair toolkit. This build features the **Unified Validation Engine** to ensure scoring consistency across all diagnostic modes.
 Windows 11 "Startup repair" failed me during a BOOT_DEVICE_INACCESSIBLE.
 I didn't want to re-install windows and lose all my app shortcuts, and/or have to reinstall & configure everything again.
@@ -4868,6 +4872,7 @@ G:\MIRACLE_BOOT_FIXER\2026-01-03_16-00_NUCLEAR_C\Hives\SYSTEM
 G:\MIRACLE_BOOT_FIXER\2026-01-03_16-00_NUCLEAR_C\Metadata\Disk_ID.txt
 G:\MIRACLE_BOOT_FIXER\2026-01-03_16-00_NUCLEAR_C\Metadata\Disk_Info.txt
 G:\MIRACLE_BOOT_FIXER\2026-01-03_16-00_NUCLEAR_C\Metadata\Robocopy_EFI.log
+
 
 
 
