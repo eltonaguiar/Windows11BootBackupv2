@@ -28,3 +28,10 @@ A surgical Windows boot repair toolkit. This build features the **Unified Valida
 1. Run `QACursor.cmd` as Admin.
 2. Select **Option 3** for Live Diagnostic.
 3. Review results: **RED / YELLOW / GREEN**.
+--------
+
+If the automated restore completes but you still face an `INACCESSIBLE_BOOT_DEVICE` loop, you must manually force the storage drivers into the Windows image using DISM from your WinPE/Recovery command prompt:
+
+```batch
+dism /Image:C:\ /Add-Driver /Driver:"G:\MIRACLE_BOOT_FIXER\<Backup_Folder>\Drivers" /Recurse
+Note: Replace C:\ with your actual Windows drive letter and G:\ with your backup drive letter.

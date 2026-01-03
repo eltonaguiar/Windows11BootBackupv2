@@ -18,3 +18,8 @@ DIAG CODES:
 - [cite_start]WARN: Component exists but volume/config may be generic. [cite: 6]
 - [cite_start]FAIL: Critical component missing (Boot likely to fail). [cite: 7]
 - [cite_start]UNKNOWN: Registry locked; check if winload.efi exists for partial credit. [cite: 7]
+
+CRITICAL: FIXING 0x7B (INACCESSIBLE_BOOT_DEVICE)
+If the script finishes but Windows won't start, run this manual command:
+> dism /Image:C:\ /Add-Driver /Driver:"BACKUP_PATH\Drivers" /Recurse 
+
