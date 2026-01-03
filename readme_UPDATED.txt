@@ -38,10 +38,10 @@ FOLDER STRUCTURE (per backup folder)
 USAGE
 
 Backup (from Windows, Admin):
-- G:\MIRACLE_BOOT_FIXER\miracle_boot_backup_fast_v8.cmd
+- G:\MIRACLE_BOOT_FIXER\miracle_boot_backup_fast_v10.cmd
 
 Restore (from WinRE / Windows USB command prompt):
-- G:\MIRACLE_BOOT_FIXER\miracle_boot_restore_fast_v8.cmd
+- G:\MIRACLE_BOOT_FIXER\miracle_boot_restore_fast_v10.cmd
 
 Notes:
 - WinRE drive letters often differ. Always pick the drive that actually contains \Windows.

@@ -5,7 +5,7 @@ FAST RECOVERY (Recommended)
    - Windows USB -> Repair -> Troubleshoot -> Advanced -> Command Prompt
 
 2) Run the restore script:
-   - G:\MIRACLE_BOOT_FIXER\miracle_boot_restore_fast_v8.cmd
+   - G:\MIRACLE_BOOT_FIXER\miracle_boot_restore_fast_v10.cmd
 
 3) When prompted:
    - Enter the Windows drive letter to fix (WinRE letters can differ from normal Windows)

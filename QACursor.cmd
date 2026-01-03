@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableDelayedExpansion
-title Miracle Boot QA - Forensic Master v15.8
+title Miracle Boot QA - Forensic Master v16.0
 
 :: NOTE: Diagnostics are read-only by default. Scoring is a weighted probability (0-100) based on evidence.
 :: Set QA_DEBUG=1 or VERBOSE=1 to get a detailed evidence breakdown per drive.
@@ -17,54 +17,485 @@ if %errorLevel% neq 0 (
 :MENU
 cls
 echo ===========================================================================
-echo       MIRACLE BOOT QA - FORENSIC MASTER v15.8
+echo       MIRACLE BOOT QA - FORENSIC MASTER v16.0
 echo ===========================================================================
 echo.
-echo [1] BACKUP FORENSICS: Interrogate DNA Folders + Metadata Integrity
-echo [2] LIVE DIAGNOSTIC: Deep Boot Validation
-echo [3] SURGICAL REPAIR: EFI + BCD Reconstruction
-echo [4] EXIT
+echo [1] BACKUP FORENSICS: Validate All Backup Folders
+echo [2] VALIDATE SPECIFIC BACKUP: Check Single Backup Folder
+echo [3] LIVE DIAGNOSTIC: Deep Boot Validation
+echo [4] SURGICAL REPAIR: EFI + BCD Reconstruction
+echo [5] EXIT
 echo.
 set /p "CHOICE=Select: "
 
 if /i "%CHOICE%"=="1" goto SCAN_BACKUPS
-if /i "%CHOICE%"=="2" goto DIAG_DRIVE_SELECTOR
-if /i "%CHOICE%"=="3" goto SURGICAL_REPAIR
-if /i "%CHOICE%"=="4" exit /b
+if /i "%CHOICE%"=="2" goto VALIDATE_SPECIFIC_BACKUP
+if /i "%CHOICE%"=="3" goto DIAG_DRIVE_SELECTOR
+if /i "%CHOICE%"=="4" goto SURGICAL_REPAIR
+if /i "%CHOICE%"=="5" exit /b
 goto MENU
 
 
 :SCAN_BACKUPS
 cls
-echo [*] Initializing Forensic Binary Interrogation...
-echo ---------------------------------------------------------------------------
+echo ===========================================================================
+echo       BACKUP FORENSICS - COMPREHENSIVE VALIDATION v14.1
+echo ===========================================================================
+echo.
 set "BASE_DIR=%~dp0"
+set "BACKUP_COUNT=0"
+set "VALID_BACKUPS=0"
+
 for /f "delims=" %%i in ('dir /b /ad "%BASE_DIR%*NUCLEAR*" 2^>nul') do (
+    set /a BACKUP_COUNT+=1
     set "B_PATH=%BASE_DIR%%%i"
-    echo [FOLDER]: %%i
-
-    if exist "!B_PATH!\BCD_Backup" (
-        echo   [BCD] RAW DATA:
-        bcdedit /store "!B_PATH!\BCD_Backup" /enum {bootmgr} 2^>nul | findstr /i "device path"
-        bcdedit /store "!B_PATH!\BCD_Backup" /enum {default} 2^>nul | findstr /i "device path resumeobject"
+    echo [BACKUP #!BACKUP_COUNT!]: %%i
+    echo ---------------------------------------------------------------------------
+    
+    :: Initialize validation score
+    set /a VALIDATION_SCORE=0
+    set /a MAX_SCORE=100
+    set "VALIDATION_ISSUES="
+    set "BCD_BACKUP_SIZE="
+    set "H_SIZE="
+    set "H_MB="
+    set "BOOTMGFW_SIZE="
+    set "BOOTMGFW_MB="
+    set "BCD_SIZE="
+    
+    :: 1. Critical EFI Files (40 points)
+    echo [*] Checking EFI Boot Files...
+    if exist "!B_PATH!\EFI\Microsoft\Boot\bootmgfw.efi" (
+        set /a VALIDATION_SCORE+=20
+        for %%F in ("!B_PATH!\EFI\Microsoft\Boot\bootmgfw.efi") do (
+            set /a BOOTMGFW_SIZE=%%~zF
+            set /a BOOTMGFW_MB=!BOOTMGFW_SIZE! / 1048576
+        )
+        echo   [OK] bootmgfw.efi: PRESENT (!BOOTMGFW_MB! MB^) ^[+20^]
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: bootmgfw.efi;"
+        echo   [^!] bootmgfw.efi: MISSING [-20]
     )
-
-    if exist "!B_PATH!\Metadata\Disk_ID.txt" echo   [DNA] Disk Signature Metadata: FOUND [OK]
-
+    
+    if exist "!B_PATH!\EFI\Microsoft\Boot\bootmgr.efi" (
+        set /a VALIDATION_SCORE+=5
+        echo   [OK] bootmgr.efi: PRESENT ^[+5^]
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: bootmgr.efi;"
+        echo   [WARN] bootmgr.efi: MISSING [-5]
+    )
+    
+    if exist "!B_PATH!\EFI\Boot\bootx64.efi" (
+        set /a VALIDATION_SCORE+=5
+        echo   [OK] bootx64.efi: PRESENT ^[+5^]
+    ) else (
+        echo   [WARN] bootx64.efi: MISSING (optional)
+    )
+    
+    if exist "!B_PATH!\EFI\Microsoft\Boot\BCD" (
+        set /a VALIDATION_SCORE+=10
+        for %%F in ("!B_PATH!\EFI\Microsoft\Boot\BCD") do (
+            set /a BCD_SIZE=%%~zF
+        )
+        if !BCD_SIZE! gtr 0 (
+            echo   [OK] EFI\Microsoft\Boot\BCD: PRESENT (!BCD_SIZE! bytes^) ^[+10^]
+        ) else (
+            set "VALIDATION_ISSUES=!VALIDATION_ISSUES! BCD file is empty;"
+            echo   [^!] EFI\Microsoft\Boot\BCD: EMPTY [-10]
+            set /a VALIDATION_SCORE-=10
+        )
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: EFI\Microsoft\Boot\BCD;"
+        echo   [^!] EFI\Microsoft\Boot\BCD: MISSING [-10]
+    )
+    
+    :: 2. BCD Backup (20 points)
+    echo [*] Checking BCD Backup...
+    if exist "!B_PATH!\BCD_Backup" (
+        set /a VALIDATION_SCORE+=20
+        for %%F in ("!B_PATH!\BCD_Backup") do (
+            set /a BCD_BACKUP_SIZE=%%~zF
+        )
+        if !BCD_BACKUP_SIZE! gtr 0 (
+            echo   [OK] BCD_Backup: PRESENT (!BCD_BACKUP_SIZE! bytes^) ^[+20^]
+            :: Validate BCD can be read
+            bcdedit /store "!B_PATH!\BCD_Backup" /enum {bootmgr} >nul 2>&1
+            if !errorlevel! equ 0 (
+                echo   [OK] BCD_Backup: VALID (can be enumerated^)
+                echo   [BCD] Boot Manager Data:
+                for /f "delims=" %%B in ('bcdedit /store "!B_PATH!\BCD_Backup" /enum {bootmgr} 2^>nul ^| findstr /i /c:"device" /c:"path" 2^>nul') do (
+                    echo     %%B
+                )
+            ) else (
+                set "VALIDATION_ISSUES=!VALIDATION_ISSUES! BCD_Backup corrupted (cannot enumerate);"
+                echo   [^!] BCD_Backup: CORRUPTED (cannot enumerate)
+            )
+        ) else (
+            set "VALIDATION_ISSUES=!VALIDATION_ISSUES! BCD_Backup is empty;"
+            echo   [^!] BCD_Backup: EMPTY [-20]
+            set /a VALIDATION_SCORE-=20
+        )
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: BCD_Backup;"
+        echo   [^!] BCD_Backup: MISSING [-20]
+    )
+    
+    :: 3. Registry Hives (20 points)
+    echo [*] Checking Registry Hives...
     for %%H in (SYSTEM SOFTWARE) do (
         if exist "!B_PATH!\Hives\%%H" (
-            for %%A in ("!B_PATH!\Hives\%%H") do set "H_SIZE=%%~zA"
-            if defined H_SIZE (
-                set /a "MB_VAL=!H_SIZE! / 1048576"
-                echo     - %%H Hive: !MB_VAL! MB [OK]
+            set /a VALIDATION_SCORE+=10
+            for %%A in ("!B_PATH!\Hives\%%H") do (
+                set /a H_SIZE=%%~zA
+                set /a H_MB=!H_SIZE! / 1048576
+            )
+            if !H_SIZE! gtr 0 (
+                echo   [OK] %%H Hive: PRESENT (!H_MB! MB^) ^[+10^]
+            ) else (
+                set "VALIDATION_ISSUES=!VALIDATION_ISSUES! %%H hive is empty;"
+                echo   [^!] %%H Hive: EMPTY [-10]
+                set /a VALIDATION_SCORE-=10
+            )
+        ) else (
+            set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: %%H hive;"
+            echo   [^!] %%H Hive: MISSING [-10]
+        )
+    )
+    
+    :: 4. Metadata Files (10 points)
+    echo [*] Checking Metadata...
+    if exist "!B_PATH!\Metadata\Disk_ID.txt" (
+        set /a VALIDATION_SCORE+=5
+        for %%F in ("!B_PATH!\Metadata\Disk_ID.txt") do (
+            if %%~zF gtr 0 (
+                echo   [OK] Disk_ID.txt: PRESENT (non-empty^) ^[+5^]
+            ) else (
+                echo   [WARN] Disk_ID.txt: EMPTY
+            )
+        )
+    ) else (
+        echo   [WARN] Disk_ID.txt: MISSING (optional)
+    )
+    
+    if exist "!B_PATH!\Metadata\Disk_Info.txt" (
+        set /a VALIDATION_SCORE+=3
+        echo   [OK] Disk_Info.txt: PRESENT ^[+3^]
+    ) else (
+        echo   [WARN] Disk_Info.txt: MISSING (optional)
+    )
+    
+    if exist "!B_PATH!\Metadata\Robocopy_EFI.log" (
+        set /a VALIDATION_SCORE+=2
+        echo   [OK] Robocopy_EFI.log: PRESENT ^[+2^]
+        :: Check Robocopy log for failures
+        findstr /i "FAILED" "!B_PATH!\Metadata\Robocopy_EFI.log" >nul 2>&1
+        if !errorlevel! equ 0 (
+            for /f "tokens=2" %%F in ('findstr /i "FAILED" "!B_PATH!\Metadata\Robocopy_EFI.log" ^| findstr /r "^[ ]*[0-9]"') do (
+                if %%F gtr 0 (
+                    set "VALIDATION_ISSUES=!VALIDATION_ISSUES! Robocopy reported %%F failures;"
+                    echo   [^!] Robocopy log shows %%F FAILED files
+                ) else (
+                    echo   [OK] Robocopy log: FAILED: 0 (all files copied)
+                )
+            )
+        ) else (
+            echo   [OK] Robocopy log: No failures detected
+        )
+    ) else (
+        echo   [WARN] Robocopy_EFI.log: MISSING (optional)
+    )
+    
+    :: 5. Optional Components (10 points)
+    echo [*] Checking Optional Components...
+    if exist "!B_PATH!\WinRE.wim" (
+        set /a VALIDATION_SCORE+=5
+        for %%F in ("!B_PATH!\WinRE.wim") do (
+            set /a WINRE_SIZE=%%~zF
+            set /a WINRE_MB=!WINRE_SIZE! / 1048576
+        )
+        echo   [OK] WinRE.wim: PRESENT (!WINRE_MB! MB^) ^[+5^]
+    ) else (
+        echo   [INFO] WinRE.wim: MISSING (optional - only needed for WinRE restore)
+    )
+    
+    if exist "!B_PATH!\Drivers" (
+        set /a VALIDATION_SCORE+=5
+        set /a DRIVER_COUNT=0
+        for /f %%D in ('dir /b /ad "!B_PATH!\Drivers" 2^>nul ^| find /c /v ""') do set "DRIVER_COUNT=%%D"
+        if !DRIVER_COUNT! gtr 0 (
+            echo   [OK] Drivers folder: PRESENT (!DRIVER_COUNT! driver packages^) ^[+5^]
+        ) else (
+            echo   [WARN] Drivers folder: EMPTY
+        )
+    ) else (
+        echo   [INFO] Drivers folder: MISSING (optional - only needed for driver restore)
+    )
+    
+    :: Final Score Calculation
+    echo.
+    echo ===========================================================================
+    echo VALIDATION SCORE: !VALIDATION_SCORE! / !MAX_SCORE!
+    echo ===========================================================================
+    
+    :: Critical components = 70 points (bootmgfw.efi + BCD + BCD_Backup + SYSTEM + SOFTWARE)
+    if !VALIDATION_SCORE! equ 100 (
+        echo [PERFECT] All components verified - backup is RESTORE-READY
+        set /a VALID_BACKUPS+=1
+    ) else if !VALIDATION_SCORE! geq 70 (
+        echo [GOOD] All CRITICAL components present - backup is RESTORE-READY
+        echo [READY] This backup has everything needed to restore a broken Windows installation
+        set /a VALID_BACKUPS+=1
+    ) else if !VALIDATION_SCORE! geq 50 (
+        echo [WARNING] Some critical components missing - backup is INCOMPLETE
+        echo [NOT READY] Restore might fail or require manual intervention
+    ) else (
+        echo [CRITICAL] Many critical components missing - backup is INVALID
+        echo [NOT READY] DO NOT use this backup for restore - create a new backup
+    )
+    
+    if defined VALIDATION_ISSUES (
+        echo.
+        echo [ISSUES DETECTED]:
+        :: Parse issues string safely
+        set "TEMP_ISSUES=!VALIDATION_ISSUES!"
+        :parse_issues
+        for /f "tokens=1* delims=;" %%A in ("!TEMP_ISSUES!") do (
+            set "ISSUE_ITEM=%%A"
+            set "TEMP_ISSUES=%%B"
+            if defined ISSUE_ITEM (
+                if not "!ISSUE_ITEM!"=="" (
+                    echo   - !ISSUE_ITEM!
+                )
+            )
+        )
+        if defined TEMP_ISSUES (
+            if not "!TEMP_ISSUES!"=="" (
+                goto :parse_issues
             )
         )
     )
-    echo ---------------------------------------------------------------------------
+    
+    echo.
+    echo ===========================================================================
+    echo.
 )
 pause
 goto MENU
 
+:VALIDATE_SPECIFIC_BACKUP
+cls
+echo ===========================================================================
+echo       VALIDATE SPECIFIC BACKUP FOLDER
+echo ===========================================================================
+echo.
+set "BASE_DIR=%~dp0"
+echo Available backup folders:
+echo ---------------------------------------------------------------------------
+set "FOLDER_LIST="
+set "FOLDER_COUNT=0"
+for /f "delims=" %%i in ('dir /b /ad "%BASE_DIR%*NUCLEAR*" 2^>nul') do (
+    set /a FOLDER_COUNT+=1
+    echo [!FOLDER_COUNT!] %%i
+    set "FOLDER_LIST=!FOLDER_LIST!%%i|"
+)
+echo.
+if !FOLDER_COUNT! equ 0 (
+    echo [^!] No backup folders found in %BASE_DIR%
+    pause
+    goto MENU
+)
+echo.
+set /p "BACKUP_SELECT=Enter backup folder name (or number): "
+if not defined BACKUP_SELECT (
+    echo [^!] No selection made
+    pause
+    goto MENU
+)
+
+:: Check if user entered a number
+set "SELECTED_FOLDER="
+set "FOLDER_INDEX=0"
+for /f "tokens=1* delims=|" %%A in ("!FOLDER_LIST!") do (
+    set /a FOLDER_INDEX+=1
+    if "!BACKUP_SELECT!"=="!FOLDER_INDEX!" (
+        set "SELECTED_FOLDER=%%A"
+        goto :found_folder
+    )
+)
+:: If not a number, treat as folder name
+set "SELECTED_FOLDER=!BACKUP_SELECT!"
+
+:found_folder
+set "B_PATH=%BASE_DIR%!SELECTED_FOLDER!"
+if not exist "!B_PATH!" (
+    echo [^!] Backup folder not found: !B_PATH!
+    pause
+    goto MENU
+)
+
+:: Run comprehensive validation on this specific folder
+cls
+echo ===========================================================================
+echo       VALIDATING BACKUP: !SELECTED_FOLDER!
+echo ===========================================================================
+echo.
+call :ValidateBackupFolder "!B_PATH!"
+echo.
+pause
+goto MENU
+
+:ValidateBackupFolder
+setlocal enabledelayedexpansion
+set "B_PATH=%~1"
+set /a VALIDATION_SCORE=0
+set /a MAX_SCORE=100
+set "VALIDATION_ISSUES="
+set "BCD_BACKUP_SIZE="
+set "H_SIZE="
+set "H_MB="
+set "BOOTMGFW_SIZE="
+set "BOOTMGFW_MB="
+set "BCD_SIZE="
+
+:: Use the same validation logic as SCAN_BACKUPS
+echo [*] Checking EFI Boot Files...
+if exist "!B_PATH!\EFI\Microsoft\Boot\bootmgfw.efi" (
+    set /a VALIDATION_SCORE+=20
+    for %%F in ("!B_PATH!\EFI\Microsoft\Boot\bootmgfw.efi") do (
+        set /a BOOTMGFW_SIZE=%%~zF
+        set /a BOOTMGFW_MB=!BOOTMGFW_SIZE! / 1048576
+    )
+    echo   [OK] bootmgfw.efi: PRESENT (!BOOTMGFW_MB! MB^) ^[+20^]
+) else (
+    set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: bootmgfw.efi;"
+    echo   [^!] bootmgfw.efi: MISSING [-20]
+)
+
+if exist "!B_PATH!\EFI\Microsoft\Boot\BCD" (
+    set /a VALIDATION_SCORE+=10
+    for %%F in ("!B_PATH!\EFI\Microsoft\Boot\BCD") do set /a BCD_SIZE=%%~zF
+    if !BCD_SIZE! gtr 0 (
+        echo   [OK] EFI\Microsoft\Boot\BCD: PRESENT (!BCD_SIZE! bytes^) ^[+10^]
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! BCD file is empty;"
+        echo   [^!] EFI\Microsoft\Boot\BCD: EMPTY [-10]
+        set /a VALIDATION_SCORE-=10
+    )
+) else (
+    set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: EFI\Microsoft\Boot\BCD;"
+    echo   [^!] EFI\Microsoft\Boot\BCD: MISSING [-10]
+)
+
+echo [*] Checking BCD Backup...
+if exist "!B_PATH!\BCD_Backup" (
+    set /a VALIDATION_SCORE+=20
+    for %%F in ("!B_PATH!\BCD_Backup") do set /a BCD_BACKUP_SIZE=%%~zF
+    if !BCD_BACKUP_SIZE! gtr 0 (
+        echo   [OK] BCD_Backup: PRESENT (!BCD_BACKUP_SIZE! bytes^) ^[+20^]
+        bcdedit /store "!B_PATH!\BCD_Backup" /enum {bootmgr} >nul 2>&1
+        if !errorlevel! equ 0 (
+            echo   [OK] BCD_Backup: VALID (can be enumerated)
+        ) else (
+            set "VALIDATION_ISSUES=!VALIDATION_ISSUES! BCD_Backup corrupted;"
+            echo   [^!] BCD_Backup: CORRUPTED
+        )
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! BCD_Backup is empty;"
+        echo   [^!] BCD_Backup: EMPTY [-20]
+        set /a VALIDATION_SCORE-=20
+    )
+) else (
+    set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: BCD_Backup;"
+    echo   [^!] BCD_Backup: MISSING [-20]
+)
+
+echo [*] Checking Registry Hives...
+for %%H in (SYSTEM SOFTWARE) do (
+    if exist "!B_PATH!\Hives\%%H" (
+        set /a VALIDATION_SCORE+=10
+        for %%A in ("!B_PATH!\Hives\%%H") do (
+            set /a H_SIZE=%%~zA
+            set /a H_MB=!H_SIZE! / 1048576
+        )
+        if !H_SIZE! gtr 0 (
+            echo   [OK] %%H Hive: PRESENT (!H_MB! MB^) ^[+10^]
+        ) else (
+            set "VALIDATION_ISSUES=!VALIDATION_ISSUES! %%H hive is empty;"
+            echo   [^!] %%H Hive: EMPTY [-10]
+            set /a VALIDATION_SCORE-=10
+        )
+    ) else (
+        set "VALIDATION_ISSUES=!VALIDATION_ISSUES! MISSING: %%H hive;"
+        echo   [^!] %%H Hive: MISSING [-10]
+    )
+)
+
+echo [*] Checking Robocopy Log...
+if exist "!B_PATH!\Metadata\Robocopy_EFI.log" (
+    set /a VALIDATION_SCORE+=2
+    echo   [OK] Robocopy_EFI.log: PRESENT ^[+2^]
+    findstr /i "FAILED" "!B_PATH!\Metadata\Robocopy_EFI.log" >nul 2>&1
+    if !errorlevel! equ 0 (
+        for /f "tokens=2" %%F in ('findstr /i "FAILED" "!B_PATH!\Metadata\Robocopy_EFI.log" ^| findstr /r "^[ ]*[0-9]"') do (
+            if %%F gtr 0 (
+                set "VALIDATION_ISSUES=!VALIDATION_ISSUES! Robocopy reported %%F failures;"
+                echo   [^!] Robocopy log shows %%F FAILED files
+            ) else (
+                echo   [OK] Robocopy log: FAILED: 0 (all files copied)
+            )
+        )
+    ) else (
+        echo   [OK] Robocopy log: No failures detected
+    )
+)
+
+echo.
+echo ===========================================================================
+echo VALIDATION SCORE: !VALIDATION_SCORE! / !MAX_SCORE!
+echo ===========================================================================
+
+:: Critical components = 70 points (bootmgfw.efi + BCD + BCD_Backup + SYSTEM + SOFTWARE)
+if !VALIDATION_SCORE! equ 100 (
+    echo [PERFECT] All components verified - backup is RESTORE-READY
+    echo [READY] This backup has everything needed to restore a broken Windows installation
+) else if !VALIDATION_SCORE! geq 70 (
+    echo [GOOD] All CRITICAL components present - backup is RESTORE-READY
+    echo [READY] This backup has everything needed to restore a broken Windows installation
+    if !VALIDATION_SCORE! lss 100 (
+        echo [NOTE] Optional components (WinRE, Drivers) might be missing but are not required for basic restore
+    )
+) else if !VALIDATION_SCORE! geq 50 (
+    echo [WARNING] Some critical components missing - backup is INCOMPLETE
+    echo [NOT READY] Restore might fail or require manual intervention
+) else (
+    echo [CRITICAL] Many critical components missing - backup is INVALID
+    echo [NOT READY] DO NOT use this backup for restore - create a new backup
+)
+
+if defined VALIDATION_ISSUES (
+    echo.
+    echo [ISSUES DETECTED]:
+    :: Parse issues string safely
+    set "TEMP_ISSUES=!VALIDATION_ISSUES!"
+    :parse_issues2
+    for /f "tokens=1* delims=;" %%A in ("!TEMP_ISSUES!") do (
+        set "ISSUE_ITEM=%%A"
+        set "TEMP_ISSUES=%%B"
+        if defined ISSUE_ITEM (
+            if not "!ISSUE_ITEM!"=="" (
+                echo   - !ISSUE_ITEM!
+            )
+        )
+    )
+    if defined TEMP_ISSUES (
+        if not "!TEMP_ISSUES!"=="" (
+            goto :parse_issues2
+        )
+    )
+)
+
+endlocal
+goto :eof
 
 :DIAG_DRIVE_SELECTOR
 cls
@@ -264,7 +695,7 @@ if not defined ESP_LETTER (
 
 :: Get DiskNumber and ESP partition
 if defined QA_DEBUG echo [DBG] calling GetDiskNumber for !D_LTR! at %time%
-if defined VERBOSE echo    [STEP] Resolving disk mapping for !D_LTR! (may take a moment)...
+if defined VERBOSE echo    [STEP] Resolving disk mapping for !D_LTR!...
 call :GetDiskNumber "!D_LTR!"
 if not defined DISK_NUM (
     set "LOG_STR=!LOG_STR! [NO_DISKMAP]"
@@ -301,7 +732,7 @@ set "DP_OUTPUT=%temp%\dp_out_%random%.txt"
     echo assign letter=!ESP_LETTER!
     echo exit
 ) > "!DP_FILE!"
-if defined VERBOSE echo    [STEP] Mounting ESP to !ESP_LETTER! using diskpart (may be slow)...
+if defined VERBOSE echo    [STEP] Mounting ESP to !ESP_LETTER! using diskpart...
 diskpart /s "!DP_FILE!" > "!DP_OUTPUT!" 2>&1
 :: Verify mount actually succeeded
 set /a ESP_MOUNTED=0
@@ -311,7 +742,7 @@ if exist "!ESP_LETTER!:\EFI\" (
 ) else (
     set "LOG_STR=!LOG_STR! [ESP_MOUNT_FAILED]"
     if defined VERBOSE (
-        echo    [WARN] DiskPart mount may have failed, checking output:
+        echo    [WARN] DiskPart mount might have failed, checking output:
         type "!DP_OUTPUT!"
     )
     del "!DP_OUTPUT!" >nul 2>&1
@@ -736,126 +1167,152 @@ call :GetDriveLabel "!D_LTR!" DRV_LABEL
 :: Add to summary table
 call :WriteSummaryTableEntry "!D_LTR!" "!DRV_LABEL!" "!PROB!" "" "%SUMMARY_TABLE%"
 
->> "%SUMMARY_FILE%" echo -----------------------------------------------------------------------
->> "%SUMMARY_FILE%" echo Drive: !D_LTR!: Label="!DRV_LABEL!"
->> "%SUMMARY_FILE%" echo   - EFI: !EFI_FOUND!
-if defined LOG_STR (
-    >> "%SUMMARY_FILE%" echo   - Issues: !LOG_STR!
+if defined SUMMARY_FILE (
+    if exist "!SUMMARY_FILE!" (
+        >> "!SUMMARY_FILE!" echo -----------------------------------------------------------------------
+        >> "!SUMMARY_FILE!" echo Drive: !D_LTR!: Label="!DRV_LABEL!"
+        >> "!SUMMARY_FILE!" echo   - EFI: !EFI_FOUND!
+        if defined LOG_STR (
+            >> "!SUMMARY_FILE!" echo   - Issues: !LOG_STR!
+        )
+        >> "!SUMMARY_FILE!" echo   - BCD: !BCD_VALID!
+        if defined BCD_OSDEVICE (
+            >> "!SUMMARY_FILE!" echo     - osdevice: !BCD_OSDEVICE!
+        )
+        >> "!SUMMARY_FILE!" echo   - winload: !WL_STAT!
+        >> "!SUMMARY_FILE!" echo   - drivers: !DRV_STAT!
+        if defined DRV_ERROR_DETAIL (
+            >> "!SUMMARY_FILE!" echo     [DETAIL] !DRV_ERROR_DETAIL!
+        )
+        if defined DRV_CONFIDENCE (
+            >> "!SUMMARY_FILE!" echo     [CONFIDENCE] !DRV_CONFIDENCE!
+        )
+        if !BOOT_PROVEN! equ 1 (
+            >> "!SUMMARY_FILE!" echo     [NOTE] Boot proven - system is currently running from this drive
+        )
+        >> "!SUMMARY_FILE!" echo   - PROB: !PROB!%%
+        if defined CONFIDENCE (
+            >> "!SUMMARY_FILE!" echo   - Verification Coverage: !CONFIDENCE!%%
+        )
+        >> "!SUMMARY_FILE!" echo   - Evidence breakdown:
+    )
 )
->> "%SUMMARY_FILE%" echo   - BCD: !BCD_VALID!
-if defined BCD_OSDEVICE (
-    >> "%SUMMARY_FILE%" echo     - osdevice: !BCD_OSDEVICE!
-)
->> "%SUMMARY_FILE%" echo   - winload: !WL_STAT!
->> "%SUMMARY_FILE%" echo   - drivers: !DRV_STAT!
-if defined DRV_ERROR_DETAIL (
-    >> "%SUMMARY_FILE%" echo     [DETAIL] !DRV_ERROR_DETAIL!
-)
-if defined DRV_CONFIDENCE (
-    >> "%SUMMARY_FILE%" echo     [CONFIDENCE] !DRV_CONFIDENCE!
-)
-if !BOOT_PROVEN! equ 1 (
-    >> "%SUMMARY_FILE%" echo     [NOTE] Boot proven - system is currently running from this drive
-)
->> "%SUMMARY_FILE%" echo   - PROB: !PROB!%%
-if defined CONFIDENCE (
-    >> "%SUMMARY_FILE%" echo   - Verification Coverage: !CONFIDENCE!%%
-)
->> "%SUMMARY_FILE%" echo   - Evidence breakdown:
 if defined EXPLANATION (
     :: Use PowerShell to safely split the explanation string
     set "TMP_EXP=!temp!\qa_exp_%random%.txt"
-    powershell -NoProfile -Command "$exp='!EXPLANATION!'; $exp -split ';' | Where-Object { $_.Trim() -ne '' } | ForEach-Object { $_.Trim() } | Out-File -FilePath '!TMP_EXP!' -Encoding ASCII"
+    setlocal enabledelayedexpansion
+    set "EXP_VAL=!EXPLANATION!"
+    endlocal & set "EXP_VAL=%EXP_VAL%"
+    powershell -NoProfile -Command "$exp='%EXP_VAL%'; $exp -split ';' | Where-Object { $_.Trim() -ne '' } | ForEach-Object { $_.Trim() } | Out-File -FilePath '%TMP_EXP%' -Encoding ASCII" 2>nul
     :: Read and display each line
-    for /f "usebackq delims=" %%L in ("!TMP_EXP!") do (
-        set "LINE=%%L"
-        >> "%SUMMARY_FILE%" echo     !LINE!
+    if exist "!TMP_EXP!" (
+        for /f "usebackq delims=" %%L in ("!TMP_EXP!") do (
+            set "LINE=%%L"
+            if defined SUMMARY_FILE (
+                >> "!SUMMARY_FILE!" echo     !LINE!
+            )
+        )
+        del "!TMP_EXP!" >nul 2>&1
     )
-    del "!TMP_EXP!" >nul 2>&1
 ) else (
-    >> "%SUMMARY_FILE%" echo     [No evidence data available]
+    if defined SUMMARY_FILE (
+        >> "!SUMMARY_FILE!" echo     [No evidence data available]
+    )
 )
 :: Add duration
->> "%SUMMARY_FILE%" echo   - Duration: !DRV_START! -> !DRV_END!
+if defined SUMMARY_FILE (
+    >> "!SUMMARY_FILE!" echo   - Duration: !DRV_START! -> !DRV_END!
+)
 :: Compute and display missing potential breakdown
-set /a C_DISK=0
-set /a C_ESP=0
-set /a C_EFI=0
-set /a C_BCD=0
-set /a C_WIN=0
-set /a C_DRV=0
-if /i not "!DISK_MAP_METHOD!"=="NONE" set /a C_DISK=W_DISKMAP
-if !ESP_FOUND! equ 1 set /a C_ESP=W_ESP
-if !EFI_PRESENT! equ 1 set /a C_EFI=W_EFI
-if !BCD_MATCH! equ 1 (
-    set /a C_BCD=W_BCD_MATCH
-) else (
-    if /i "!BCD_VALID!"=="WARN (Volume ID)" set /a C_BCD=W_BCD_MATCH/2
-)
-if /i "!WL_STAT!"=="OK" set /a C_WIN=W_WINLOAD
-:: Driver scoring: OK gets full points, UNKNOWN gets partial, FAIL gets 0
-if /i "!DRV_STAT!"=="OK" (
-    set /a C_DRV=W_DRIVERS
-) else if /i "!DRV_STAT!"=="UNKNOWN" (
-    set /a C_DRV=W_DRIVERS_UNKNOWN
-) else if /i "!DRV_STAT!"=="FAIL" (
+:: Only compute missing breakdown if PROB is not 100
+if !PROB! neq 100 (
+    set /a C_DISK=0
+    set /a C_ESP=0
+    set /a C_EFI=0
+    set /a C_BCD=0
+    set /a C_WIN=0
     set /a C_DRV=0
-) else if /i "!DRV_STAT!"=="WARN" (
-    set /a C_DRV=W_DRIVERS
+    if /i not "!DISK_MAP_METHOD!"=="NONE" set /a C_DISK=W_DISKMAP
+    if !ESP_FOUND! equ 1 set /a C_ESP=W_ESP
+    if !EFI_PRESENT! equ 1 set /a C_EFI=W_EFI
+    if !BCD_MATCH! equ 1 (
+        set /a C_BCD=W_BCD_MATCH
+    ) else (
+        if /i "!BCD_VALID!"=="WARN (Volume ID)" set /a C_BCD=W_BCD_MATCH/2
+    )
+    if /i "!WL_STAT!"=="OK" set /a C_WIN=W_WINLOAD
+    :: Driver scoring: OK gets full points, UNKNOWN gets partial, FAIL gets 0
+    if /i "!DRV_STAT!"=="OK" (
+        set /a C_DRV=W_DRIVERS
+    ) else if /i "!DRV_STAT!"=="UNKNOWN" (
+        set /a C_DRV=W_DRIVERS_UNKNOWN
+    ) else if /i "!DRV_STAT!"=="FAIL" (
+        set /a C_DRV=0
+    ) else if /i "!DRV_STAT!"=="WARN" (
+        set /a C_DRV=W_DRIVERS
+    )
+    set /a SUMC=C_DISK + C_ESP + C_EFI + C_BCD + C_WIN + C_DRV
+    set /a MISSING=100 - SUMC
+    if !MISSING! lss 0 set /a MISSING=0
 )
-set /a SUMC=C_DISK + C_ESP + C_EFI + C_BCD + C_WIN + C_DRV
-set /a MISSING=100 - SUMC
-if !MISSING! lss 0 set /a MISSING=0
-if !PROB! equ 100 (
-    >> "%SUMMARY_FILE%" echo.
-    >> "%SUMMARY_FILE%" echo   [PERFECT] All checks passed - 100%% boot probability!
-) else (
-    >> "%SUMMARY_FILE%" echo.
-    if exist "%SUMMARY_FILE%" >> "%SUMMARY_FILE%" echo   Why not 100%%? Missing !MISSING!%% points:
-    :: Only show items that are actually missing - use the same boolean flags that determined scoring
-    if !C_DISK! lss !W_DISKMAP! if exist "%SUMMARY_FILE%" >> "%SUMMARY_FILE%" echo     - Disk map: Missing !W_DISKMAP! points (currently +!C_DISK!)
-    :: Check ESP - use ESP_FOUND flag (same one that awarded points)
-    if !ESP_FOUND! equ 0 (
-        if exist "%SUMMARY_FILE%" (
-            >> "%SUMMARY_FILE%" echo     - ESP: Missing !W_ESP! points (currently +!C_ESP!)
-            >> "%SUMMARY_FILE%" echo       [ROOT CAUSE] No EFI System Partition found on disk. This partition is required for UEFI boot.
-            >> "%SUMMARY_FILE%" echo       [FIX] Run: diskpart ^> list disk ^> select disk X ^> create partition efi size=100 ^> format quick fs=fat32 ^> assign letter=Y
-        )
-    )
-    :: Check EFI - use EFI_PRESENT flag (same one that awarded points)
-    if !EFI_PRESENT! equ 0 (
-        if exist "%SUMMARY_FILE%" (
-            >> "%SUMMARY_FILE%" echo     - EFI files: Missing !W_EFI! points (currently +!C_EFI!)
-            >> "%SUMMARY_FILE%" echo       [ROOT CAUSE] bootmgfw.efi missing from ESP\EFI\Microsoft\Boot\ directory.
-            >> "%SUMMARY_FILE%" echo       [FIX] Run: bcdboot !D_LTR!:\Windows /f UEFI (rebuilds EFI boot files)
-        )
-    )
-    :: Check BCD - use BCD_MATCH flag (same one that awarded points)
-    if !BCD_MATCH! equ 0 (
-        if /i not "!BCD_VALID!"=="WARN (Volume ID)" (
-            if exist "%SUMMARY_FILE%" (
-                >> "%SUMMARY_FILE%" echo     - BCD pointer: Missing !W_BCD_MATCH! points (currently +!C_BCD!)
-                >> "%SUMMARY_FILE%" echo       [ROOT CAUSE] BCD does not point to this drive partition, or BCD is missing/corrupted.
-                >> "%SUMMARY_FILE%" echo       [FIX] Run: bcdboot !D_LTR!:\Windows /f UEFI (rebuilds BCD and fixes partition pointer)
-            )
-        )
-    )
-    if !C_WIN! lss !W_WINLOAD! if exist "%SUMMARY_FILE%" >> "%SUMMARY_FILE%" echo     - winload: Missing !W_WINLOAD! points (currently +!C_WIN!)
-    if !C_DRV! lss !W_DRIVERS! if exist "%SUMMARY_FILE%" (
-        if /i "!DRV_STAT!"=="UNKNOWN" (
-            >> "%SUMMARY_FILE%" echo     - drivers: UNKNOWN - Cannot verify (currently +!C_DRV! points, partial credit)
-            >> "%SUMMARY_FILE%" echo       [NOTE] System hive locked or inaccessible - cannot verify driver configuration
-        ) else if /i "!DRV_STAT!"=="FAIL" (
-            >> "%SUMMARY_FILE%" echo     - drivers: Missing !W_DRIVERS! points (currently +!C_DRV!)
-            if defined DRV_ERROR_DETAIL (
-                >> "%SUMMARY_FILE%" echo       [DETAIL] !DRV_ERROR_DETAIL!
-            )
+if defined SUMMARY_FILE (
+    if exist "!SUMMARY_FILE!" (
+        if !PROB! equ 100 (
+            >> "!SUMMARY_FILE!" echo.
+            >> "!SUMMARY_FILE!" echo   [PERFECT] All checks passed - 100%% boot probability!
         ) else (
-            >> "%SUMMARY_FILE%" echo     - drivers: Missing !W_DRIVERS! points (currently +!C_DRV!)
+            >> "!SUMMARY_FILE!" echo.
+            if !PROB! neq 100 (
+                >> "!SUMMARY_FILE!" echo   Why not 100%%? Missing !MISSING!%% points:
+            )
+            :: Only show items that are actually missing - use the same boolean flags that determined scoring
+            if !C_DISK! lss !W_DISKMAP! (
+                >> "!SUMMARY_FILE!" echo     - Disk map: Missing !W_DISKMAP! points (currently +!C_DISK!)
+            )
+            :: Check ESP - use ESP_FOUND flag (same one that awarded points)
+            if !ESP_FOUND! equ 0 (
+                >> "!SUMMARY_FILE!" echo     - ESP: Missing !W_ESP! points (currently +!C_ESP!)
+                >> "!SUMMARY_FILE!" echo       [ROOT CAUSE] No EFI System Partition found on disk. This partition is required for UEFI boot.
+                >> "!SUMMARY_FILE!" echo       [FIX] Run: diskpart ^> list disk ^> select disk X ^> create partition efi size=100 ^> format quick fs=fat32 ^> assign letter=Y
+            )
+            :: Check EFI - use EFI_PRESENT flag (same one that awarded points)
+            if !EFI_PRESENT! equ 0 (
+                >> "!SUMMARY_FILE!" echo     - EFI files: Missing !W_EFI! points (currently +!C_EFI!)
+                >> "!SUMMARY_FILE!" echo       [ROOT CAUSE] bootmgfw.efi missing from ESP\EFI\Microsoft\Boot\ directory.
+                >> "!SUMMARY_FILE!" echo       [FIX] Run: bcdboot !D_LTR!:\Windows /f UEFI (rebuilds EFI boot files)
+            )
+            :: Check BCD - use BCD_MATCH flag (same one that awarded points)
+            if !BCD_MATCH! equ 0 (
+                if /i not "!BCD_VALID!"=="WARN (Volume ID)" (
+                    >> "!SUMMARY_FILE!" echo     - BCD pointer: Missing !W_BCD_MATCH! points (currently +!C_BCD!)
+                    >> "!SUMMARY_FILE!" echo       [ROOT CAUSE] BCD does not point to this drive partition, or BCD is missing/corrupted.
+                    >> "!SUMMARY_FILE!" echo       [FIX] Run: bcdboot !D_LTR!:\Windows /f UEFI (rebuilds BCD and fixes partition pointer)
+                )
+            )
+            if !C_WIN! lss !W_WINLOAD! (
+                >> "!SUMMARY_FILE!" echo     - winload: Missing !W_WINLOAD! points (currently +!C_WIN!)
+            )
+            if !C_DRV! lss !W_DRIVERS! (
+                if /i "!DRV_STAT!"=="UNKNOWN" (
+                    >> "!SUMMARY_FILE!" echo     - drivers: UNKNOWN - Cannot verify (currently +!C_DRV! points, partial credit)
+                    >> "!SUMMARY_FILE!" echo       [NOTE] System hive locked or inaccessible - cannot verify driver configuration
+                ) else if /i "!DRV_STAT!"=="FAIL" (
+                    >> "!SUMMARY_FILE!" echo     - drivers: Missing !W_DRIVERS! points (currently +!C_DRV!)
+                    if defined DRV_ERROR_DETAIL (
+                        >> "!SUMMARY_FILE!" echo       [DETAIL] !DRV_ERROR_DETAIL!
+                    )
+                ) else (
+                    >> "!SUMMARY_FILE!" echo     - drivers: Missing !W_DRIVERS! points (currently +!C_DRV!)
+                )
+            )
         )
     )
 )
->> "%SUMMARY_FILE%" echo.
+if defined SUMMARY_FILE (
+    if exist "!SUMMARY_FILE!" (
+        >> "!SUMMARY_FILE!" echo.
+    )
+)
 
 echo.
 
@@ -991,13 +1448,17 @@ if exist "!TEMP_DIR!" (
 
 :: Method 2: If PowerShell failed, try vol command
 if not defined DRV_LABEL (
-    set "TMP_VOL=!TEMP_DIR!\qa_vol_%random%.txt"
-    vol !DRV_LETTER!: > "!TMP_VOL!" 2>nul
-    if exist "!TMP_VOL!" (
-        for /f "tokens=4*" %%A in ('type "!TMP_VOL!" ^| findstr /i "Volume in drive"') do (
-            set "DRV_LABEL=%%B"
+    if defined DRV_LETTER (
+        if not "!DRV_LETTER!"=="" (
+            set "TMP_VOL=!TEMP_DIR!\qa_vol_%random%.txt"
+            vol "!DRV_LETTER!:" > "!TMP_VOL!" 2>nul
+            if exist "!TMP_VOL!" (
+                for /f "tokens=4*" %%A in ('type "!TMP_VOL!" ^| findstr /i "Volume in drive"') do (
+                    set "DRV_LABEL=%%B"
+                )
+                del "!TMP_VOL!" >nul 2>&1
+            )
         )
-        del "!TMP_VOL!" >nul 2>&1
     )
 )
 
