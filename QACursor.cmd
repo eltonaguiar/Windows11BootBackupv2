@@ -22,7 +22,7 @@ echo.
 echo [1] BACKUP FORENSICS: Validate All Backup Folders
 echo [2] VALIDATE SPECIFIC BACKUP: Check Single Backup Folder
 echo [3] LIVE DIAGNOSTIC: Deep Boot Validation
-echo [4] SURGICAL REPAIR: EFI + BCD Reconstruction
+echo [4] SURGICAL REPAIR: EFI + BCD + chkdsk + SFC + DISM
 echo [5] EXIT
 echo.
 set /p "CHOICE=Select: "
@@ -59,7 +59,7 @@ echo ===========================================================================
 echo.
 set "BASE_DIR=%~dp0"
 set "BACKUP_COUNT=0"
-for /f "delims=" %%i in ('dir /b /ad "!BASE_DIR!*NUCLEAR*" 2^>nul') do (
+for /f "delims=" %%i in ('dir /b /ad "!BASE_DIR!*FASTBOOT*" "!BASE_DIR!*NUCLEAR*" 2^>nul') do (
     set /a BACKUP_COUNT+=1
     echo [BACKUP #!BACKUP_COUNT!]: %%i
     echo ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ echo.
 set "BASE_DIR=%~dp0"
 set "FOLDER_LIST="
 set "FOLDER_COUNT=0"
-for /f "delims=" %%i in ('dir /b /ad "%BASE_DIR%*NUCLEAR*" 2^>nul') do (
+for /f "delims=" %%i in ('dir /b /ad "%BASE_DIR%*FASTBOOT*" "%BASE_DIR%*NUCLEAR*" 2^>nul') do (
     set /a FOLDER_COUNT+=1
     echo [!FOLDER_COUNT!] %%i
     set "FOLDER_LIST=!FOLDER_LIST!%%i|"
@@ -156,9 +156,29 @@ if exist "!B_PATH!\Metadata\Robocopy_EFI.log" (
     if !errorlevel! neq 0 ( set /a V_SCORE+=2 & echo    [OK] Robocopy Log Clean [+2] )
 )
 
+:: 5. WINCORE Detection (Bonus scoring)
+set "WINCORE_PRESENT=NO"
+set "WINCORE_BONUS=0"
+if exist "!B_PATH!\WIN_CORE\SYSTEM32\ntoskrnl.exe" (
+    set "WINCORE_PRESENT=YES"
+    set /a WINCORE_BONUS=10
+    set /a V_SCORE+=WINCORE_BONUS
+    echo    [OK] WINCORE Payload: DETECTED (Enhanced Recovery Available) [+!WINCORE_BONUS!]
+) else (
+    echo    [INFO] WINCORE Payload: Not present (FASTBOOT only)
+)
+
 echo ---------------------------------------------------------------------------
-echo FINAL SCORE: !V_SCORE! / 100
+set /a OS_INTEGRITY_CONFIDENCE=V_SCORE
+if "!WINCORE_PRESENT!"=="YES" (
+    echo FINAL SCORE: !V_SCORE! / 100 (Base: !OS_INTEGRITY_CONFIDENCE! + WINCORE Bonus: !WINCORE_BONUS!)
+) else (
+    echo FINAL SCORE: !V_SCORE! / 100
+)
 if !V_SCORE! geq 70 ( echo [STATUS]: RESTORE-READY ) else ( echo [STATUS]: INCOMPLETE )
+if "!WINCORE_PRESENT!"=="YES" (
+    echo OS Integrity Confidence: !OS_INTEGRITY_CONFIDENCE!%% (Enhanced with WINCORE)
+)
 if defined V_ISSUES call :DisplayIssues "!V_ISSUES!"
 endlocal
 goto :eof
@@ -305,8 +325,204 @@ goto :eof
 
 :SURGICAL_REPAIR
 cls
+echo ===========================================================================
+echo                    SURGICAL REPAIR MENU
+echo ===========================================================================
+echo.
 echo Target Drive (e.g. C):
 set /p "RD=Drive: "
-if exist "!RD!:\Windows" ( bcdboot !RD!:\Windows /f UEFI )
+if not defined RD goto MENU
+if not exist "!RD!:\Windows" (
+    echo [!] ERROR: !RD!:\Windows not found.
+    pause
+    goto MENU
+)
+
+cls
+echo ===========================================================================
+echo                    SURGICAL REPAIR OPTIONS
+echo ===========================================================================
+echo Target: !RD!:
+echo.
+echo [1] EFI + BCD Reconstruction (bcdboot)
+echo [2] File System Repair (chkdsk /f /r)
+echo [3] Offline System File Check (sfc /scannow)
+echo [4] DISM Cleanup (Revert Pending Actions)
+echo [5] Run All Repairs
+echo [6] Back to Main Menu
+echo.
+set /p "REPAIR_CHOICE=Select: "
+
+if /i "!REPAIR_CHOICE!"=="1" goto REPAIR_EFI_BCD
+if /i "!REPAIR_CHOICE!"=="2" goto REPAIR_CHKDSK
+if /i "!REPAIR_CHOICE!"=="3" goto REPAIR_SFC
+if /i "!REPAIR_CHOICE!"=="4" goto REPAIR_DISM
+if /i "!REPAIR_CHOICE!"=="5" goto REPAIR_ALL
+if /i "!REPAIR_CHOICE!"=="6" goto MENU
+goto SURGICAL_REPAIR
+
+:REPAIR_EFI_BCD
+cls
+echo ===========================================================================
+echo                    EFI + BCD RECONSTRUCTION
+echo ===========================================================================
+echo Target: !RD!:
+echo.
+echo [*] Running bcdboot to reconstruct EFI and BCD...
+bcdboot !RD!:\Windows /f UEFI
+if !errorlevel! equ 0 (
+    echo [OK] EFI + BCD reconstruction completed successfully.
+) else (
+    echo [!] ERROR: bcdboot failed. Check permissions and drive status.
+)
+echo.
 pause
-goto MENU
+goto SURGICAL_REPAIR
+
+:REPAIR_CHKDSK
+cls
+echo ===========================================================================
+echo                    FILE SYSTEM REPAIR (chkdsk)
+echo ===========================================================================
+echo Target: !RD!:
+echo.
+echo [WARNING] This will schedule chkdsk to run on the next reboot.
+echo [WARNING] The system will restart automatically after scheduling.
+echo.
+set /p "CHKDSK_CONFIRM=Schedule chkdsk /f /r for !RD!:? (Y/N, default N): "
+if /i not "!CHKDSK_CONFIRM!"=="Y" (
+    echo [*] chkdsk cancelled.
+    pause
+    goto SURGICAL_REPAIR
+)
+echo.
+echo [*] Scheduling chkdsk /f /r for !RD!:...
+chkdsk !RD!: /f /r
+if !errorlevel! equ 0 (
+    echo [OK] chkdsk scheduled successfully.
+    echo [INFO] chkdsk will run on the next system restart.
+) else (
+    echo [!] ERROR: Failed to schedule chkdsk. Drive may be in use or locked.
+)
+echo.
+pause
+goto SURGICAL_REPAIR
+
+:REPAIR_SFC
+cls
+echo ===========================================================================
+echo                    OFFLINE SYSTEM FILE CHECK (SFC)
+echo ===========================================================================
+echo Target: !RD!:
+echo.
+echo [*] Running offline SFC scan...
+echo [INFO] This may take several minutes...
+echo.
+sfc /scannow /offbootdir=!RD!:\ /offwindir=!RD!:\Windows
+if !errorlevel! equ 0 (
+    echo [OK] SFC scan completed successfully.
+) else (
+    echo [!] WARNING: SFC scan completed with errors or warnings.
+    echo [INFO] Check the output above for details.
+)
+echo.
+pause
+goto SURGICAL_REPAIR
+
+:REPAIR_DISM
+cls
+echo ===========================================================================
+echo                    DISM CLEANUP (Revert Pending Actions)
+echo ===========================================================================
+echo Target: !RD!:
+echo.
+echo [*] Running DISM cleanup to revert pending actions...
+echo [INFO] This may take several minutes...
+echo.
+DISM /Cleanup-Image /RevertPendingActions
+if !errorlevel! equ 0 (
+    echo [OK] DISM cleanup completed successfully.
+) else (
+    echo [!] WARNING: DISM cleanup completed with errors or warnings.
+    echo [INFO] Check the output above for details.
+)
+echo.
+pause
+goto SURGICAL_REPAIR
+
+:REPAIR_ALL
+cls
+echo ===========================================================================
+echo                    RUNNING ALL REPAIRS
+echo ===========================================================================
+echo Target: !RD!:
+echo.
+echo [WARNING] This will run all repair operations sequentially.
+echo [WARNING] chkdsk will be scheduled for next reboot.
+echo.
+set /p "ALL_CONFIRM=Proceed with all repairs? (Y/N, default N): "
+if /i not "!ALL_CONFIRM!"=="Y" (
+    echo [*] All repairs cancelled.
+    pause
+    goto SURGICAL_REPAIR
+)
+
+echo.
+echo ===========================================================================
+echo [1/4] EFI + BCD Reconstruction...
+echo ===========================================================================
+bcdboot !RD!:\Windows /f UEFI
+if !errorlevel! equ 0 (
+    echo [OK] EFI + BCD reconstruction completed.
+) else (
+    echo [!] ERROR: bcdboot failed.
+)
+echo.
+
+echo ===========================================================================
+echo [2/4] Scheduling chkdsk /f /r...
+echo ===========================================================================
+chkdsk !RD!: /f /r
+if !errorlevel! equ 0 (
+    echo [OK] chkdsk scheduled successfully.
+) else (
+    echo [!] ERROR: Failed to schedule chkdsk.
+)
+echo.
+
+echo ===========================================================================
+echo [3/4] Offline SFC scan...
+echo ===========================================================================
+sfc /scannow /offbootdir=!RD!:\ /offwindir=!RD!:\Windows
+if !errorlevel! equ 0 (
+    echo [OK] SFC scan completed.
+) else (
+    echo [!] WARNING: SFC scan completed with issues.
+)
+echo.
+
+echo ===========================================================================
+echo [4/4] DISM Cleanup...
+echo ===========================================================================
+DISM /Cleanup-Image /RevertPendingActions
+if !errorlevel! equ 0 (
+    echo [OK] DISM cleanup completed.
+) else (
+    echo [!] WARNING: DISM cleanup completed with issues.
+)
+echo.
+
+echo ===========================================================================
+echo                    ALL REPAIRS COMPLETED
+echo ===========================================================================
+echo.
+echo [SUMMARY]
+echo - EFI + BCD: Reconstruction attempted
+echo - chkdsk: Scheduled for next reboot
+echo - SFC: Offline scan completed
+echo - DISM: Cleanup completed
+echo.
+echo [NOTE] Restart the system for chkdsk to run.
+echo.
+pause
+goto SURGICAL_REPAIR

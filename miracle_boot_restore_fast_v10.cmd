@@ -14,6 +14,12 @@ if not exist "!BKP!\EFI" (echo [!] ERROR: Invalid backup folder. & pause & exit 
 set /p "TARGET=Enter Target Drive Letter to fix (e.g. C): "
 set "TARGET=%TARGET::=%"
 
+:: Validate target drive has Windows
+if not exist "!TARGET!:\Windows" (
+    echo [!] ERROR: !TARGET!:\Windows not found. Invalid target drive.
+    pause & exit /b
+)
+
 :: 2. Identify Target EFI using Mountvol/DiskPart
 echo [*] Mapping !TARGET!: to physical hardware...
 (echo list volume) > "%temp%\dp_scan.txt"
@@ -89,6 +95,69 @@ reg unload HKLM\OFF_SYS >nul
 reg load HKLM\OFF_SOFT "!TARGET!:\Windows\System32\config\SOFTWARE" >nul
 reg restore HKLM\OFF_SOFT "!BKP!\Hives\SOFTWARE" >nul
 reg unload HKLM\OFF_SOFT >nul
+
+:: 7. WINCORE Restoration (if present)
+if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" (
+    echo.
+    echo ===========================================================================
+    echo                    WINCORE PAYLOAD DETECTED
+    echo ===========================================================================
+    
+    :: Calculate approximate size (WinPE-compatible)
+    set "WINCORE_SIZE=~8-12 GB"
+    :: Try PowerShell method if available (full Windows)
+    for /f %%s in ('powershell -Command "(Get-ChildItem '!BKP!\WIN_CORE' -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1GB" 2^>nul') do (
+        set "WINCORE_SIZE=%%s GB"
+    )
+    
+    echo Detected WINCORE payload (!WINCORE_SIZE! GB).
+    echo This will overwrite Windows system files but preserve data.
+    echo.
+    set /p "WINCORE_CONFIRM=Proceed with WINCORE restore? (Y/N, default N): "
+    if /i "!WINCORE_CONFIRM!"=="Y" (
+        :: Final safety check - ensure target is valid Windows installation
+        if not exist "!TARGET!:\Windows\System32" (
+            echo [!] ERROR: !TARGET!:\Windows\System32 not found. Aborting WINCORE restore.
+            pause & exit /b
+        )
+        echo.
+        echo [*] Starting WINCORE restore to !TARGET!:\Windows...
+        echo [*] This may take several minutes...
+        
+        :: Create logs directory if needed
+        if not exist "!BKP!\LOGS" mkdir "!BKP!\LOGS" 2>nul
+        
+        :: Restore System32
+        echo [*] Restoring System32...
+        robocopy "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /R:1 /W:1 /COPY:DAT /NP /NFL /NDL /LOG:"!BKP!\LOGS\wincore_restore.log"
+        
+        :: Restore SysWOW64
+        echo [*] Restoring SysWOW64...
+        robocopy "!BKP!\WIN_CORE\SYSWOW64" "!TARGET!:\Windows\SysWOW64" /E /R:1 /W:1 /COPY:DAT /NP /NFL /NDL /LOG+:"!BKP!\LOGS\wincore_restore.log"
+        
+        :: Restore Boot
+        echo [*] Restoring Boot...
+        robocopy "!BKP!\WIN_CORE\BOOT" "!TARGET!:\Windows\Boot" /E /R:1 /W:1 /COPY:DAT /NP /NFL /NDL /LOG+:"!BKP!\LOGS\wincore_restore.log"
+        
+        :: Restore Drivers
+        echo [*] Restoring Drivers...
+        robocopy "!BKP!\WIN_CORE\DRIVERS" "!TARGET!:\Windows\System32\drivers" /E /R:1 /W:1 /COPY:DAT /NP /NFL /NDL /LOG+:"!BKP!\LOGS\wincore_restore.log"
+        
+        :: Restore INF
+        echo [*] Restoring INF...
+        robocopy "!BKP!\WIN_CORE\INF" "!TARGET!:\Windows\INF" /E /R:1 /W:1 /COPY:DAT /NP /NFL /NDL /LOG+:"!BKP!\LOGS\wincore_restore.log"
+        
+        :: Restore servicing
+        echo [*] Restoring servicing...
+        robocopy "!BKP!\WIN_CORE\SERVICING" "!TARGET!:\Windows\servicing" /E /R:1 /W:1 /COPY:DAT /NP /NFL /NDL /LOG+:"!BKP!\LOGS\wincore_restore.log"
+        
+        echo [OK] WINCORE restore completed. Log: !BKP!\LOGS\wincore_restore.log
+    ) else (
+        echo [*] WINCORE restore skipped.
+    )
+) else (
+    echo [*] No WINCORE payload detected. Skipping.
+)
 
 echo ===========================================================================
 echo [SUCCESS] Surgical Restore Complete. Unmount S: if manually mounted.
