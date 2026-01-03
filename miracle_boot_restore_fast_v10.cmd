@@ -143,7 +143,7 @@ echo [OK] Target ESP path validated: !TARGET_ESP_PATH!
 :: Restore EFI structure with detailed logging
 echo [*] Copying EFI structure from backup to target ESP...
 robocopy "!BKP!\EFI" "!TARGET_ESP_PATH!\EFI" /E /R:1 /W:1 /NP /NFL /NDL /LOG:"%temp%\restore_efi_%random%.log"
-set "ROBOCOPY_ERR=!errorLevel!"
+set "ROBOCOPY_ERR=%ERRORLEVEL%"
 
 :: Robocopy exit codes: 0-7 = success, 8+ = error
 if !ROBOCOPY_ERR! geq 8 (
@@ -193,8 +193,9 @@ if not exist "!BKP!\BCD_Backup" (
     pause & exit /b
 )
 bcdedit /import "!BKP!\BCD_Backup" /clean >nul 2>&1
-if !errorLevel! neq 0 (
-    echo [!] WARNING: BCD import returned error code !errorLevel!
+set "BCD_IMPORT_ERR=%ERRORLEVEL%"
+if !BCD_IMPORT_ERR! neq 0 (
+    echo [!] WARNING: BCD import returned error code !BCD_IMPORT_ERR!
 )
 if not exist "!TARGET_ESP_PATH!\EFI\Microsoft\Boot\BCD" (
     echo [!] ERROR: BCD file not found after restore. Attempting direct copy...
@@ -214,6 +215,7 @@ echo [*] Rebuilding BCD signatures...
 bcdboot !TARGET!:\Windows /f UEFI >nul 2>&1
 :: Then import our backup BCD
 bcdedit /import "!BKP!\BCD_Backup" /clean >nul 2>&1
+set "BCD_IMPORT_ERR2=%ERRORLEVEL%"
 :: Update device paths
 bcdedit /store "!TARGET_ESP_PATH!\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET!: >nul 2>&1
 bcdedit /store "!TARGET_ESP_PATH!\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -228,10 +230,11 @@ echo [OK] BCD signatures updated.
 if exist "!BKP!\Drivers" (
     echo [*] Injecting Drivers into !TARGET!: ...
     dism /Image:!TARGET!:\ /Add-Driver /Driver:"!BKP!\Drivers" /Recurse >nul 2>&1
-    if !errorLevel! equ 0 (
+    set "DISM_ERR=%ERRORLEVEL%"
+    if !DISM_ERR! equ 0 (
         echo [OK] Drivers injected successfully.
     ) else (
-        echo [!] WARNING: Driver injection returned error code !errorLevel!
+        echo [!] WARNING: Driver injection returned error code !DISM_ERR!
         echo [!] This may be normal if no compatible drivers were found.
     )
 ) else (
@@ -250,12 +253,14 @@ if not exist "!BKP!\Hives\SOFTWARE" (
 )
 
 reg load HKLM\OFF_SYS "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
-if !errorLevel! neq 0 (
+set "REG_LOAD_ERR=%ERRORLEVEL%"
+if !REG_LOAD_ERR! neq 0 (
     echo [!] ERROR: Failed to load SYSTEM hive from target drive.
     pause & exit /b
 )
 reg restore HKLM\OFF_SYS "!BKP!\Hives\SYSTEM" >nul 2>&1
-if !errorLevel! neq 0 (
+set "REG_RESTORE_ERR=%ERRORLEVEL%"
+if !REG_RESTORE_ERR! neq 0 (
     echo [!] ERROR: Failed to restore SYSTEM hive.
     reg unload HKLM\OFF_SYS >nul 2>&1
     pause & exit /b
@@ -264,12 +269,14 @@ reg unload HKLM\OFF_SYS >nul 2>&1
 echo [OK] SYSTEM hive restored.
 
 reg load HKLM\OFF_SOFT "!TARGET!:\Windows\System32\config\SOFTWARE" >nul 2>&1
-if !errorLevel! neq 0 (
+set "REG_LOAD_SOFT_ERR=%ERRORLEVEL%"
+if !REG_LOAD_SOFT_ERR! neq 0 (
     echo [!] ERROR: Failed to load SOFTWARE hive from target drive.
     pause & exit /b
 )
 reg restore HKLM\OFF_SOFT "!BKP!\Hives\SOFTWARE" >nul 2>&1
-if !errorLevel! neq 0 (
+set "REG_RESTORE_SOFT_ERR=%ERRORLEVEL%"
+if !REG_RESTORE_SOFT_ERR! neq 0 (
     echo [!] ERROR: Failed to restore SOFTWARE hive.
     reg unload HKLM\OFF_SOFT >nul 2>&1
     pause & exit /b
