@@ -2,6 +2,12 @@
 
 A surgical Windows boot repair toolkit with enhanced recovery capabilities. This build features **Nuclear-Hardened** backup scripts and a **Forensic Master** QA system with comprehensive repair tools.
 
+Purpose: 
+Windows Startup Repair failed to fix a BOOT_DEVICE_INACCESSIBLE error, but restoring to an Acronis/AOMEI backupper image worked, but if its only the "boot" files we want to restore I figured we should be able to speed up the restore operation compared to restoring the entire used portion of a drive.
+
+Even on NVM-E SSD, a regular Acronis image restore of ~590GB took about 30-60 minutes..
+
+
 ## ✨ Features
 
 ### 💾 Backup System (miracle_boot_backup_fast_v10.cmd v14.1)
@@ -139,3 +145,4 @@ For persistent boot issues, use QACursor.cmd Option 4 (Surgical Repair):
 
 - **v14.1** (Backup): Nuclear-Hardened build with VSS support, WinPE compatibility, parser-safe scripting
 - **v16.9** (QA): Forensic Master with unified validation engine and comprehensive repair tools
+
