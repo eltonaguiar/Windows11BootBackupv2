@@ -1,6 +1,9 @@
 # Miracle Boot Fixer
 
 A comprehensive Windows boot repair toolkit for surgical repair of boot failures without full disk restore. Includes advanced diagnostic tools and fast recovery options.
+Started coding with Google Gemini/ChatGPT and ended up having to Cursor to get certain parts running.. 
+Haven't used this so far to save my boot, but if it works, then maybe it would be the Windows 11 Startup Repair v2.0 that windows themselves may consider.. 
+So nobody has to lose all their shortcuts or reinstall all their programs.. and also not waste time restoring an entire image (which even on NVM-E appears to take like 30+ minutes).
 
 ## 🎯 Purpose
 
