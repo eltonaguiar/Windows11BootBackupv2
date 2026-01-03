@@ -1,6 +1,7 @@
 # Miracle Boot Fixer
 
 A comprehensive Windows boot repair toolkit for surgical repair of boot failures without full disk restore. Includes advanced diagnostic tools and fast recovery options.
+This has yet to "save" someone from windows dying on them.. but lets see what happens .
 
 ## 🎯 Purpose
 
@@ -253,4 +254,5 @@ Improvements and bug fixes welcome! Please test thoroughly before submitting.
 ---
 
 **Remember**: Always keep full system backups. This toolkit is for boot repair, not data recovery.
+
 
