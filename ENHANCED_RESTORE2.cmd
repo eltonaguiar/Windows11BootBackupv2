@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v23.3 - [BOOT ENTRY PROMOTION + NUCLEAR REBUILD]
+:: MIRACLE BOOT RESTORE v23.4 - [CACHE SHIELD + BOOT PROMOTION]
 :: =============================================================================
-title Miracle Boot Restore v23.3 - Forensic Audit [STABLE]
+title Miracle Boot Restore v23.4 - Forensic Audit [STABLE]
 
-set "CV=23.3"
+set "CV=23.4"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v23.3 - [BOOT PROMOTION ONLINE]
+echo    MIRACLE BOOT RESTORE v23.4 - [CACHE SHIELD ONLINE]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
-echo [*] STATUS: Boot Entry Promotion Active
+echo [*] STATUS: Mandatory Cache-Control Enforced
 
 :: 1. AUTO-NETWORKING
 wpeutil InitializeNetwork >nul 2>&1
@@ -68,7 +68,7 @@ if not defined TDNUM set "TDNUM=3"
 :MENU_TOP
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v23.3 - TARGET DISK: !TDNUM! 
+echo    MIRACLE BOOT RESTORE v23.4 - TARGET DISK: !TDNUM! 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
@@ -108,7 +108,7 @@ if "!E_CORE!"=="FOUND" (
 )
 
 :: =============================================================================
-:: 7. EFI & BCD REBUILD + BOOT ENTRY PROMOTION
+:: 7. EFI & BCD REBUILD + BOOT PROMOTION
 :: =============================================================================
 :FASTBOOT
 echo [*] Restoring EFI Structure...
@@ -118,7 +118,6 @@ echo [*] Rebuilding BCD Store...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
 :: Promote New Boot Entry
-echo [*] Promoting Miracle Boot Entry...
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -130,7 +129,7 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v23.3 !MODE_STR! Restore Complete.
+echo [FINISHED] v23.4 !MODE_STR! Restore Complete.
 echo ===========================================================================
 
 :: =============================================================================
@@ -139,12 +138,12 @@ echo ===========================================================================
 set /p "UPCH=Attempt to pull latest script version? (Y/N): "
 if /i "!UPCH!"=="Y" (
     echo [*] Checking bit.ly/4skPgOh for updates...
-    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh -o %temp%\check.cmd
+    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?nocache=!TIME:~6,2! -o %temp%\check.cmd
     for /f "tokens=2 delims=:" %%V in ('type %temp%\check.cmd ^| findstr "VERSION:"') do set "NV=%%V"
     set "NV=!NV: =!"
     if "!NV!" GTR "!CV!" (
         echo [!] NEW VERSION AVAILABLE: !NV!
-        echo [*] Update via the One-Liner in Section 1.
+        echo [*] Use the One-Liner from Section 1 to update.
     ) else (
         echo [OK] You are running the latest version.
     )
