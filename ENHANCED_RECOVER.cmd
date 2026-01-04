@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Miracle Boot Restore v20.2 - Forensic Auto-Mapper [STABLE]
+title Miracle Boot Restore v20.3 - Deep Discovery [STABLE]
 
 :: =============================================================================
 :: 1. HARDCODED SYSTEM PATHS (WinRE Recovery)
@@ -22,74 +22,73 @@ set "V_BOOT=FAIL"
 set "V_BCD=FAIL"
 
 :: =============================================================================
-:: 2. FORENSIC DRIVE DISCOVERY (No longer assumes C:)
+:: 2. FORENSIC DRIVE DISCOVERY (Windows & Backup)
 :: =============================================================================
 echo [*] Searching for Windows Installation...
 set "TARGET="
-:: Check all possible drive letters for the System hive
 for %%D in (C D E F G H I J K L) do if exist "%%D:\Windows\System32\config\SYSTEM" if not defined TARGET set "TARGET=%%D"
 
 if not defined TARGET echo [!] ERROR: Windows installation not found! & pause & exit /b 1
 echo [OK] Detected Windows on Drive: !TARGET!:
 
-:: =============================================================================
-:: 3. AUTO-DETECT BACKUP
-:: =============================================================================
-echo [*] Scanning for latest backup...
-set "BASE_DIR=%~dp0"
+echo [*] Searching for Backup Folder on all drives...
 set "BKP="
-for /f "delims=" %%i in ('dir /b /ad /o-d "%BASE_DIR%*FASTBOOT*" "%BASE_DIR%*NUCLEAR*" 2^>nul') do if not defined BKP set "BKP=%BASE_DIR%%%i"
+:: Scans every drive for any folder containing FASTBOOT or NUCLEAR
+for %%D in (C D E F G H I J K L) do (
+    if not defined BKP (
+        for /f "delims=" %%F in ('dir /b /ad /s "%%D:\*FASTBOOT*" "%%D:\*NUCLEAR*" 2^>nul') do (
+            if not defined BKP set "BKP=%%F"
+        )
+    )
+)
 
-if not defined BKP echo [!] ERROR: No backups found. & pause & exit /b 1
+if not defined BKP echo [!] ERROR: No backups found on any drive! & pause & exit /b 1
 echo [OK] Using Backup: "!BKP!"
 
 :: =============================================================================
-:: 4. MAP TARGET DRIVE -> DISK NUMBER
+:: 3. MAP TARGET DRIVE -> DISK NUMBER
 :: =============================================================================
 echo [*] Mapping !TARGET!: to physical hardware...
 set "TDNUM="
-:: Method A: PowerShell (If available in WinRE)
+:: Method A: PowerShell (If available)
 for /f %%A in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "try{(Get-Partition -DriveLetter ''%TARGET%'').DiskNumber}catch{''}" 2^>nul') do set "TDNUM=%%A"
 
 if defined TDNUM goto :FIND_ESP
 
 :: Method B: Hardened DiskPart Fallback
-echo [*] PowerShell failed. Probing DiskPart volume table... 
+echo [*] PowerShell failed. Probing DiskPart volume table...
 (echo list volume) > "%temp%\dp.txt"
-%DPART% /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
+!DPART! /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
 set "TVOL="
 for /f "tokens=2,3,4" %%A in ('type "%temp%\dp_out.txt"') do if /i "%%C"=="!TARGET!" set "TVOL=%%B"
 
 if not defined TVOL echo [!] ERROR: Target Volume !TARGET! not found in DiskPart. & pause & exit /b 1
 
-(echo select volume !TVOL! & echo detail volume) > "%temp%\dp.txt"
-%DPART% /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
+(echo select volume !TVOL! ^& echo detail volume) | !DPART! > "%temp%\dp_out.txt"
 for /f "tokens=4" %%D in ('type "%temp%\dp_out.txt" ^| !FSTR! /i "Disk ###"') do set "TDNUM=%%D"
 
 if not defined TDNUM echo [!] ERROR: Disk Map Failed. & pause & exit /b 1
 
 :: =============================================================================
-:: 5. FIND & MOUNT ESP (PROBE MODE)
+:: 4. FIND & MOUNT ESP (PROBE MODE)
 :: =============================================================================
 :FIND_ESP
 echo [OK] Target Disk: !TDNUM!
 set "TPNUM="
 
-:: GPT Type-ID Scan (Standard EFI GUID)
+:: GPT Type-ID Scan
 for /f %%B in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-Partition -DiskNumber %TDNUM% ^| ? {$_.GptType -eq ''%GUID_ESP%''} ^| select -First 1; if($p){$p.PartitionNumber}" 2^>nul') do set "TPNUM=%%B"
 
 if defined TPNUM goto :MOUNT_ESP
 
-:: Forensic Probe: Iterate partitions until bootmgfw.efi is found
+:: Forensic Probe
 echo [*] ESP search failed. Probing partitions via mount...
-(echo select disk !TDNUM! & echo list partition) > "%temp%\dp.txt"
-%DPART% /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
+(echo select disk !TDNUM! ^& echo list partition) | !DPART! > "%temp%\dp_out.txt"
 
 for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| !FSTR! /r /c:"^[ ]*Partition[ ]*[0-9]"') do (
     set "CAND=%%P"
     mountvol !MNT!: /d >nul 2>&1
-    (echo select disk !TDNUM! & echo select partition !CAND! & echo assign letter=!MNT!) > "%temp%\dp.txt"
-    %DPART% /s "%temp%\dp.txt" >nul 2>&1
+    (echo select disk !TDNUM! ^& echo select partition !CAND! ^& echo assign letter=!MNT!) | !DPART! >nul 2>&1
     if exist "!MNT!:\EFI\Microsoft\Boot\bootmgfw.efi" (
         set "TPNUM=!CAND!"
         goto :MOUNT_ESP
@@ -100,17 +99,16 @@ for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| !FSTR! /r /c:"^[ ]*Partit
 if not defined TPNUM echo [!] ERROR: ESP Not Found. & pause & exit /b 1
 
 :: =============================================================================
-:: 6. MOUNT & EXECUTE
+:: 5. EXECUTION MENU
 :: =============================================================================
 :MOUNT_ESP
 echo [OK] ESP Found: Partition !TPNUM!
 mountvol !MNT!: /d >nul 2>&1
-(echo select disk !TDNUM! & echo select partition !TPNUM! & echo assign letter=!MNT!) > "%temp%\dp.txt"
-%DPART% /s "%temp%\dp.txt" >nul 2>&1
+(echo select disk !TDNUM! ^& echo select partition !TPNUM! ^& echo assign letter=!MNT!) | !DPART! >nul 2>&1
 
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.2 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
+echo    MIRACLE BOOT RESTORE v20.3 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD - WinRE RECOMMENDED)
 echo [2] ADVANCED RESTORE (EFI + REG + WINCORE - WinRE ONLY)
@@ -121,7 +119,7 @@ if "%CHOICE%"=="2" goto :ADVANCED
 goto :FASTBOOT
 
 :ADVANCED
-echo [*] Neutralizing Target Hive (Rename-and-Replace Method)...
+echo [*] Neutralizing Target Hive...
 !ATT! -R -S -H "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
 !TAKE! /f "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
 !ICACLS! "!TARGET!:\Windows\System32\config\SYSTEM" /grant administrators:F >nul 2>&1
@@ -129,7 +127,7 @@ ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
 copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
 
 if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" (
-    echo [*] Injecting WINCORE Payloads...
+    echo [*] Restoring WINCORE...
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /B /R:1 /W:1 /COPY:DAT /NP /NFL /NDL >nul
 )
 
@@ -156,8 +154,7 @@ if !errorlevel! equ 0 set "V_BCD=OK"
 
 :CLEANUP
 mountvol !MNT!: /d >nul 2>&1
-(echo select disk !TDNUM! & echo select partition !TPNUM! & echo remove letter=!MNT!) > "%temp%\dp.txt"
-%DPART% /s "%temp%\dp.txt" >nul 2>&1
+(echo select disk !TDNUM! ^& echo select partition !TPNUM! ^& echo remove letter=!MNT!) | !DPART! >nul 2>&1
 
 echo ===========================================================================
 echo [FINISHED] Restore Attempted.
