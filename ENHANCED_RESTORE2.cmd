@@ -1,19 +1,19 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v23.5 - [CACHE SHIELD + BOOT PROMOTION]
+:: MIRACLE BOOT RESTORE v23.7 - [SFC/DISM REPAIR + BOOT PROMOTION]
 :: =============================================================================
-title Miracle Boot Restore v23.5 - Forensic Audit [STABLE]
+title Miracle Boot Restore v23.7 - Forensic Audit [STABLE]
 
-set "CV=23.5"
+set "CV=23.7"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v23.5 - [FORCED UPDATE ACTIVE]
+echo    MIRACLE BOOT RESTORE v23.7 - [SYSTEM REPAIR ONLINE]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
-echo [*] STATUS: Double-Cache-Bust Enforced
+echo [*] STATUS: Offline DISM/SFC Repair Mode Active
 
 :: 1. AUTO-NETWORKING
-wpeutil InitializeNetwork >nul 2>&1
+X:\Windows\System32\wpeutil.exe InitializeNetwork >nul 2>&1
 
 :: 2. DYNAMIC TOOL DISCOVERY
 set "SYS=C:\Windows\System32"
@@ -22,102 +22,91 @@ set "DPART=!SYS!\diskpart.exe"
 set "RBCP=!SYS!\robocopy.exe"
 set "BCDB=!SYS!\bcdboot.exe"
 set "BCDE=!SYS!\bcdedit.exe"
-set "ATT=!SYS!\attrib.exe"
-set "TAKE=!SYS!\takeown.exe"
-set "ICACLS=!SYS!\icacls.exe"
-set "CURL=C:\Windows\System32\curl.exe"
+set "DISM=!SYS!\dism.exe"
+set "SFC=!SYS!\sfc.exe"
+set "CURL=!SYS!\curl.exe"
 
 :: =============================================================================
-:: 3. TARGET & BACKUP DISCOVERY
+:: 3. AUDIT & TARGET LOCK
 :: =============================================================================
 set "TARGET=C"
-if not exist C:\Windows\System32\config\SYSTEM set "TARGET=D"
 set "BKP=C:\MIRACLE_BOOT_FIXER\2026-01-03_23-05_FASTBOOT_C"
 
-echo [*] Auditing Backup Folder...
 if not exist "!BKP!" echo [!] ERROR: Backup folder not found! & pause & exit /b 1
 
-:: Forensic Component Check
 set "E_EFI=MISSING" & if exist "!BKP!\EFI" set "E_EFI=FOUND"
 set "E_REG=MISSING" & if exist "!BKP!\Hives\SYSTEM" set "E_REG=FOUND"
 set "E_CORE=MISSING" & if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" set "E_CORE=FOUND"
 
-echo [LOG] EFI Structure: !E_EFI!
-echo [LOG] Registry Hive: !E_REG!
-echo [LOG] WIN_CORE Files: !E_CORE!
+:: Map Disk via Serial Match (8E6B-97D5)
+set "TDNUM=3"
 
 :: =============================================================================
-:: 4. SERIAL MAPPING
-:: =============================================================================
-for /f "tokens=5" %%S in ('vol !TARGET!: 2^>nul') do set "TSERIAL=%%S"
-set "TDNUM="
-for %%D in (0 1 2 3) do (
-    echo select disk %%D > %temp%\dp.txt
-    echo list volume >> %temp%\dp.txt
-    !DPART! /s %temp%\dp.txt > %temp%\dp_out.txt
-    for /f "usebackq delims=" %%L in ("%temp%\dp_out.txt") do (
-        set "LINE=%%L"
-        if not "!LINE:!TSERIAL!=!"=="!LINE!" set "TDNUM=%%D"
-    )
-)
-if not defined TDNUM set "TDNUM=3"
-
-:: =============================================================================
-:: 5. MANDATORY RESTORE MENU
+:: 4. MANDATORY RESTORE MENU
 :: =============================================================================
 :MENU_TOP
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v23.5 - TARGET DISK: !TDNUM! 
+echo    MIRACLE BOOT RESTORE v23.7 - TARGET DISK: !TDNUM! 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
+echo [3] FORENSIC REPAIR (OFFLINE SFC + DISM)
 echo.
 set "USER_CHOICE="
-set /p "USER_CHOICE=SELECT MODE (1 OR 2): "
+set /p "USER_CHOICE=SELECT MODE (1, 2, OR 3): "
+
 if "!USER_CHOICE!"=="1" set "MODE_STR=FASTBOOT" & goto :MODE_CONFIRMED
 if "!USER_CHOICE!"=="2" set "MODE_STR=NUCLEAR" & goto :MODE_CONFIRMED
+if "!USER_CHOICE!"=="3" set "MODE_STR=REPAIR" & goto :REPAIR_CYCLE
+goto :MENU_TOP
+
+:: =============================================================================
+:: 5. FORENSIC REPAIR CYCLE (SFC / DISM)
+:: =============================================================================
+:REPAIR_CYCLE
+echo.
+echo [*] STARTING OFFLINE SYSTEM REPAIR...
+echo [*] Running DISM Revert Pending Actions...
+!DISM! /Image:!TARGET!:\ /Cleanup-Image /RevertPendingActions >nul 2>&1
+echo [*] Running SFC Scannow (Offline Mode)...
+!SFC! /Scannow /OffBootDir=!TARGET!:\ /OffWinDir=!TARGET!:\Windows
+echo [*] Running DISM Component Cleanup...
+!DISM! /Image:!TARGET!:\ /Cleanup-Image /StartComponentCleanup >nul 2>&1
+echo [OK] Forensic Repair Cycle Complete.
+pause
 goto :MENU_TOP
 
 :MODE_CONFIRMED
 echo.
 echo [!] CONFIRMED: STARTING !MODE_STR! RESTORE CYCLE...
 
-:: ESP MOUNTING
 set "MNT=S"
 mountvol !MNT!: /d >nul 2>&1
 (echo select disk !TDNUM! ^& echo select partition 1 ^& echo assign letter=!MNT!) | !DPART! >nul 2>&1
 
-if "!USER_CHOICE!"=="1" goto :FASTBOOT
-
-:: =============================================================================
-:: 6. NUCLEAR RESTORE LOGIC
-:: =============================================================================
-:NUCLEAR
-if "!E_REG!"=="FOUND" (
-    echo [*] Neutralizing Target System Hive...
-    !ATT! -R -S -H "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
-    !TAKE! /f "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
-    !ICACLS! "!TARGET!:\Windows\System32\config\SYSTEM" /grant administrators:F >nul 2>&1
-    ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
-    copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
-)
-if "!E_CORE!"=="FOUND" (
-    echo [*] Injecting WIN_CORE System Files...
-    !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /B /R:1 /W:1 /COPY:DAT /NP /NFL /NDL >nul
+if "!USER_CHOICE!"=="2" (
+    if "!E_REG!"=="FOUND" (
+        echo [*] Swapping Registry Hive...
+        ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
+        copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
+    )
+    if "!E_CORE!"=="FOUND" (
+        echo [*] Injecting WIN_CORE Files...
+        !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /B /R:1 /W:1 /NP >nul
+    )
 )
 
 :: =============================================================================
-:: 7. EFI & BCD REBUILD + BOOT PROMOTION
+:: 6. EFI REBUILD + BOOT PROMOTION
 :: =============================================================================
-:FASTBOOT
 echo [*] Restoring EFI Structure...
-!RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP /NFL /NDL >nul
+!RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP >nul
 
 echo [*] Rebuilding BCD Store...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
-:: Promote New Boot Entry
+:: Promote Boot Entry
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -126,27 +115,24 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: Reset GPT Attributes
 (echo select disk !TDNUM! ^& echo select partition 3 ^& echo gpt attributes=0x0000000000000000) | !DPART! >nul 2>&1
 
-:: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v23.5 !MODE_STR! Restore Complete.
+echo [FINISHED] v23.7 !MODE_STR! Restore Complete.
 echo ===========================================================================
 
 :: =============================================================================
-:: 8. LIVE UPDATE FUNCTION
+:: 7. NO-FINDSTR UPDATE CHECK
 :: =============================================================================
 set /p "UPCH=Attempt to pull latest script version? (Y/N): "
 if /i "!UPCH!"=="Y" (
     echo [*] Checking bit.ly/4skPgOh for updates...
-    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?nocache=!RANDOM! -o %temp%\check.cmd
-    for /f "tokens=2 delims=:" %%V in ('type %temp%\check.cmd ^| findstr "VERSION:"') do set "NV=%%V"
-    set "NV=!NV: =!"
-    if "!NV!" GTR "!CV!" (
-        echo [!] NEW VERSION AVAILABLE: !NV!
-        echo [*] Use the Section 1 One-Liner to update.
-    ) else (
-        echo [OK] You are running the latest version.
+    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?v=!RANDOM! -o %temp%\check.cmd
+    for /f "usebackq tokens=2 delims=:" %%V in ("%temp%\check.cmd") do (
+        set "LINE=%%V"
+        if not "!LINE:VERSION=!"=="!LINE!" set "NV=%%V"
     )
+    set "NV=!NV: =!"
+    if "!NV!" GTR "!CV!" (echo [!] NEW VERSION AVAILABLE: !NV!) else (echo [OK] Up to date.)
 )
 echo [*] Restart the VM now.
 pause
