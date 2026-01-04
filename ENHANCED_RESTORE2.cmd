@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v23.4 - [CACHE SHIELD + BOOT PROMOTION]
+:: MIRACLE BOOT RESTORE v23.5 - [CACHE SHIELD + BOOT PROMOTION]
 :: =============================================================================
-title Miracle Boot Restore v23.4 - Forensic Audit [STABLE]
+title Miracle Boot Restore v23.5 - Forensic Audit [STABLE]
 
-set "CV=23.4"
+set "CV=23.5"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v23.4 - [CACHE SHIELD ONLINE]
+echo    MIRACLE BOOT RESTORE v23.5 - [FORCED UPDATE ACTIVE]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
-echo [*] STATUS: Mandatory Cache-Control Enforced
+echo [*] STATUS: Double-Cache-Bust Enforced
 
 :: 1. AUTO-NETWORKING
 wpeutil InitializeNetwork >nul 2>&1
@@ -68,7 +68,7 @@ if not defined TDNUM set "TDNUM=3"
 :MENU_TOP
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v23.4 - TARGET DISK: !TDNUM! 
+echo    MIRACLE BOOT RESTORE v23.5 - TARGET DISK: !TDNUM! 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
@@ -129,7 +129,7 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v23.4 !MODE_STR! Restore Complete.
+echo [FINISHED] v23.5 !MODE_STR! Restore Complete.
 echo ===========================================================================
 
 :: =============================================================================
@@ -138,12 +138,12 @@ echo ===========================================================================
 set /p "UPCH=Attempt to pull latest script version? (Y/N): "
 if /i "!UPCH!"=="Y" (
     echo [*] Checking bit.ly/4skPgOh for updates...
-    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?nocache=!TIME:~6,2! -o %temp%\check.cmd
+    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?nocache=!RANDOM! -o %temp%\check.cmd
     for /f "tokens=2 delims=:" %%V in ('type %temp%\check.cmd ^| findstr "VERSION:"') do set "NV=%%V"
     set "NV=!NV: =!"
     if "!NV!" GTR "!CV!" (
         echo [!] NEW VERSION AVAILABLE: !NV!
-        echo [*] Use the One-Liner from Section 1 to update.
+        echo [*] Use the Section 1 One-Liner to update.
     ) else (
         echo [OK] You are running the latest version.
     )
