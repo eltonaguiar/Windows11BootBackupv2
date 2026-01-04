@@ -1,15 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v22.9 - [CACHE BYPASS + NUCLEAR REBUILD]
+:: MIRACLE BOOT RESTORE v23.2 - [FORENSIC AUDIT + LIVE UPDATE CHECK]
 :: =============================================================================
-title Miracle Boot Restore v22.9 - Nuclear Zero-Dependency [STABLE]
+title Miracle Boot Restore v23.2 - Forensic Audit [STABLE]
 
+set "CV=23.2"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v22.9 - [FORCED FRESH LOAD]
+echo    MIRACLE BOOT RESTORE v23.2 - [UPDATE ENGINE ONLINE]
 echo ===========================================================================
-echo [*] CURRENT VERSION: 22.9
-echo [*] STATUS: Cache-Control Header + Path Wipe Active
+echo [*] CURRENT VERSION: !CV!
+echo [*] STATUS: Deep File Audit + Version Tracking Active
 
 :: 1. AUTO-NETWORKING
 wpeutil InitializeNetwork >nul 2>&1
@@ -24,6 +25,7 @@ set "BCDE=!SYS!\bcdedit.exe"
 set "ATT=!SYS!\attrib.exe"
 set "TAKE=!SYS!\takeown.exe"
 set "ICACLS=!SYS!\icacls.exe"
+set "CURL=C:\Windows\System32\curl.exe"
 
 :: =============================================================================
 :: 3. TARGET & BACKUP DISCOVERY
@@ -31,12 +33,23 @@ set "ICACLS=!SYS!\icacls.exe"
 set "TARGET=C"
 if not exist C:\Windows\System32\config\SYSTEM set "TARGET=D"
 set "BKP=C:\MIRACLE_BOOT_FIXER\2026-01-03_23-05_FASTBOOT_C"
-if not exist "!BKP!" (
-    for /f "delims=" %%F in ('dir /b /ad /s "!TARGET!:\*FASTBOOT*" 2^>nul') do set "BKP=%%F"
-)
+
+echo [*] Auditing Backup Folder: !BKP!
+if not exist "!BKP!" echo [!] ERROR: Backup folder not found at !BKP! & pause & exit /b 1
+
+:: Forensic Component Check
+set "E_EFI=MISSING" & if exist "!BKP!\EFI" set "E_EFI=FOUND"
+set "E_REG=MISSING" & if exist "!BKP!\Hives\SYSTEM" set "E_REG=FOUND"
+set "E_CORE=MISSING" & if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" set "E_CORE=FOUND"
+
+echo [LOG] EFI Structure: !E_EFI!
+echo [LOG] Registry Hive: !E_REG!
+echo [LOG] WIN_CORE Files: !E_CORE!
+
+if "!E_EFI!"=="MISSING" echo [!] CRITICAL: EFI files missing. Cannot fix boot. & pause & exit /b 1
 
 :: =============================================================================
-:: 4. SERIAL MAPPING (INTERNAL MATCH - NO FINDSTR)
+:: 4. SERIAL MAPPING
 :: =============================================================================
 for /f "tokens=5" %%S in ('vol !TARGET!: 2^>nul') do set "TSERIAL=%%S"
 set "TDNUM="
@@ -57,7 +70,7 @@ if not defined TDNUM set "TDNUM=0"
 :MENU_TOP
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v22.9 - TARGET DISK: !TDNUM! 
+echo    MIRACLE BOOT RESTORE v23.2 - TARGET DISK: !TDNUM! 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
@@ -82,17 +95,19 @@ mountvol !MNT!: /d >nul 2>&1
 if "!USER_CHOICE!"=="1" goto :FASTBOOT
 
 :: =============================================================================
-:: 6. NUCLEAR RESTORE LOGIC (Registry + WIN_CORE)
+:: 6. NUCLEAR RESTORE LOGIC
 :: =============================================================================
 :NUCLEAR
-echo [*] Neutralizing Target System Hive...
-!ATT! -R -S -H "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
-!TAKE! /f "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
-!ICACLS! "!TARGET!:\Windows\System32\config\SYSTEM" /grant administrators:F >nul 2>&1
-ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
-copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
+if "!E_REG!"=="FOUND" (
+    echo [*] Neutralizing Target System Hive...
+    !ATT! -R -S -H "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
+    !TAKE! /f "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
+    !ICACLS! "!TARGET!:\Windows\System32\config\SYSTEM" /grant administrators:F >nul 2>&1
+    ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
+    copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
+)
 
-if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" (
+if "!E_CORE!"=="FOUND" (
     echo [*] Injecting WIN_CORE System Files...
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /B /R:1 /W:1 /COPY:DAT /NP /NFL /NDL >nul
 )
@@ -111,9 +126,37 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
 
+:: Reset GPT Attributes
+(echo select disk !TDNUM! ^& echo select partition 3 ^& echo gpt attributes=0x0000000000000000) | !DPART! >nul 2>&1
+
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v22.9 !MODE_STR! Restore Complete. Restart the VM.
+echo [FINISHED] v23.2 !MODE_STR! Restore Complete.
 echo ===========================================================================
+
+:: =============================================================================
+:: 8. LIVE UPDATE FUNCTION
+:: =============================================================================
+set /p "UPCH=Attempt to pull latest script version? (Y/N): "
+if /i "!UPCH!"=="Y" (
+    echo [*] Checking bit.ly/4skPgOh for updates...
+    !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh -o %temp%\check.cmd
+    for /f "tokens=2 delims=:" %%V in ('type %temp%\check.cmd ^| findstr "VERSION:"') do set "NV=%%V"
+    set "NV=!NV: =!"
+    
+    if "!NV!"=="" (
+        echo [!] Could not verify remote version.
+    ) else (
+        echo [LOG] Current: !CV! ^| Latest: !NV!
+        if "!NV!" GTR "!CV!" (
+            echo [!] NEW VERSION AVAILABLE: !NV!
+            echo [*] Run this to update: wpeutil InitializeNetwork ^&^& del /f /q %%temp%%\r.cmd ^&^& curl -L bit.ly/4skPgOh -o %%temp%%\r.cmd ^&^& %%temp%%\r.cmd
+        ) else (
+            echo [OK] You are running the latest version.
+        )
+    )
+)
+
+echo [*] Restart the VM now.
 pause
