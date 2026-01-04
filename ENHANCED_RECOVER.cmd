@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Miracle Boot Restore v20.3 - Deep Discovery [STABLE]
+title Miracle Boot Restore v20.4 - Deep Discovery [STABLE]
 
 :: =============================================================================
 :: 1. HARDCODED SYSTEM PATHS (WinRE Recovery)
@@ -21,6 +21,10 @@ set "GUID_ESP={c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
 set "V_BOOT=FAIL"
 set "V_BCD=FAIL"
 
+echo ===========================================================================
+echo    MIRACLE BOOT RESTORE v20.4 - DEEP DISCOVERY ENGINE
+echo ===========================================================================
+
 :: =============================================================================
 :: 2. FORENSIC DRIVE DISCOVERY (Windows & Backup)
 :: =============================================================================
@@ -31,31 +35,37 @@ for %%D in (C D E F G H I J K L) do if exist "%%D:\Windows\System32\config\SYSTE
 if not defined TARGET echo [!] ERROR: Windows installation not found! & pause & exit /b 1
 echo [OK] Detected Windows on Drive: !TARGET!:
 
-echo [*] Searching for Backup Folder on all drives...
+echo [*] Initializing Deep Backup Search (Scanning C: through L:)...
 set "BKP="
-:: Scans every drive for any folder containing FASTBOOT or NUCLEAR
+:: v20.4 Recursive search across all drives
 for %%D in (C D E F G H I J K L) do (
     if not defined BKP (
+        echo [*] Scanning drive %%D: for backup folders...
         for /f "delims=" %%F in ('dir /b /ad /s "%%D:\*FASTBOOT*" "%%D:\*NUCLEAR*" 2^>nul') do (
-            if not defined BKP set "BKP=%%F"
+            if not defined BKP (
+                set "BKP=%%F"
+                echo [OK] Found candidate: "%%F"
+            )
         )
     )
 )
 
-if not defined BKP echo [!] ERROR: No backups found on any drive! & pause & exit /b 1
-echo [OK] Using Backup: "!BKP!"
+if not defined BKP (
+    echo [!] ERROR: No backups found on any drive!
+    echo [!] Tried searching for folders containing FASTBOOT or NUCLEAR.
+    pause & exit /b 1
+)
+echo [OK] Final Backup Path: "!BKP!"
 
 :: =============================================================================
 :: 3. MAP TARGET DRIVE -> DISK NUMBER
 :: =============================================================================
 echo [*] Mapping !TARGET!: to physical hardware...
 set "TDNUM="
-:: Method A: PowerShell (If available)
 for /f %%A in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "try{(Get-Partition -DriveLetter ''%TARGET%'').DiskNumber}catch{''}" 2^>nul') do set "TDNUM=%%A"
 
 if defined TDNUM goto :FIND_ESP
 
-:: Method B: Hardened DiskPart Fallback
 echo [*] PowerShell failed. Probing DiskPart volume table...
 (echo list volume) > "%temp%\dp.txt"
 !DPART! /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
@@ -76,12 +86,10 @@ if not defined TDNUM echo [!] ERROR: Disk Map Failed. & pause & exit /b 1
 echo [OK] Target Disk: !TDNUM!
 set "TPNUM="
 
-:: GPT Type-ID Scan
 for /f %%B in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-Partition -DiskNumber %TDNUM% ^| ? {$_.GptType -eq ''%GUID_ESP%''} ^| select -First 1; if($p){$p.PartitionNumber}" 2^>nul') do set "TPNUM=%%B"
 
 if defined TPNUM goto :MOUNT_ESP
 
-:: Forensic Probe
 echo [*] ESP search failed. Probing partitions via mount...
 (echo select disk !TDNUM! ^& echo list partition) | !DPART! > "%temp%\dp_out.txt"
 
@@ -108,7 +116,7 @@ mountvol !MNT!: /d >nul 2>&1
 
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.3 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
+echo    MIRACLE BOOT RESTORE v20.4 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD - WinRE RECOMMENDED)
 echo [2] ADVANCED RESTORE (EFI + REG + WINCORE - WinRE ONLY)
@@ -138,7 +146,6 @@ echo [*] Restoring EFI Structure...
 echo [*] Rebuilding BCD Pointers...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
-:: GUID Selection
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 set "CUR_GUID="
 for /f "tokens=2" %%G in ('!BCDE! /store "!STORE!" /enum osloader ^| !FSTR! /i "identifier"') do if not defined CUR_GUID set "CUR_GUID=%%G"
