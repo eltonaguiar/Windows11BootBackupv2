@@ -9,9 +9,10 @@ title Miracle Boot Restore v21.1 - Forensic Final [STABLE]
 echo [*] Initializing WinRE Network Stack...
 wpeutil InitializeNetwork >nul 2>&1
 echo [*] Waiting 10s for DHCP negotiation...
-timeout /t 10 /nobreak >nul
+ping 127.0.0.1 -n 11 >nul 2>&1
 
 set "SYS=%SystemRoot%\System32"
+if not exist "%SYS%\findstr.exe" set "SYS=%SystemRoot%\system32"
 set "FSTR=%SYS%\findstr.exe"
 set "DPART=%SYS%\diskpart.exe"
 set "RBCP=%SYS%\robocopy.exe"
@@ -73,10 +74,10 @@ if "!TSERIAL!"=="" echo [!] ERROR: Could not read serial for !TARGET!: & pause &
 echo [LOG] Target Serial: !TSERIAL!
 
 (echo list disk) > "%temp%\dp.txt"
-for /f "tokens=2" %%D in ('!DPART! /s "%temp%\dp.txt" ^| !FSTR! /i "Disk "') do (
+for /f "tokens=2" %%D in ('"%DPART%" /s "%temp%\dp.txt" ^| "%FSTR%" /i "Disk "') do (
     if not defined TDNUM (
         (echo select disk %%D & echo list volume) > "%temp%\dp.txt"
-        !DPART! /s "%temp%\dp.txt" | !FSTR! /i "!TSERIAL!" >nul
+        "%DPART%" /s "%temp%\dp.txt" | "%FSTR%" /i "!TSERIAL!" >nul
         if !errorlevel! equ 0 set "TDNUM=%%D"
     )
 )
@@ -92,11 +93,11 @@ set "TPNUM="
 (echo select disk !TDNUM! & echo list partition) > "%temp%\dp.txt"
 !DPART! /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
 
-for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| !FSTR! /i "System"') do set "TPNUM=%%P"
+for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| "%FSTR%" /i "System"') do set "TPNUM=%%P"
 
 if not defined TPNUM (
     echo [*] Probing partitions for boot files...
-    for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| !FSTR! /r /c:"^[ ]*Partition[ ]*[0-9]"') do (
+    for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| "%FSTR%" /r /c:"^[ ]*Partition[ ]*[0-9]"') do (
         set "CAND=%%P"
         mountvol !MNT!: /d >nul 2>&1
         (echo select disk !TDNUM! ^& echo select partition !CAND! ^& echo assign letter=!MNT!) | !DPART! >nul 2>&1
@@ -143,7 +144,7 @@ echo [*] Rebuilding BCD Store...
 
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 set "CUR_GUID="
-for /f "tokens=2" %%G in ('!BCDE! /store "!STORE!" /enum osloader ^| !FSTR! /i "identifier"') do if not defined CUR_GUID set "CUR_GUID=%%G"
+for /f "tokens=2" %%G in ('"%BCDE%" /store "!STORE!" /enum osloader ^| "%FSTR%" /i "identifier"') do if not defined CUR_GUID set "CUR_GUID=%%G"
 if not defined CUR_GUID set "CUR_GUID={default}"
 
 !BCDE! /store "!STORE!" /set !CUR_GUID! device partition=!TARGET!: >nul 2>&1
@@ -151,7 +152,7 @@ if not defined CUR_GUID set "CUR_GUID={default}"
 
 :: Final Verification
 if exist "!MNT!:\EFI\Microsoft\Boot\bootmgfw.efi" set "V_BOOT=OK"
-!BCDE! /store "!STORE!" /enum !CUR_GUID! 2^>nul | !FSTR! /i "partition=!TARGET!:" >nul
+"%BCDE%" /store "!STORE!" /enum !CUR_GUID! 2^>nul | "%FSTR%" /i "partition=!TARGET!:" >nul
 if !errorlevel! equ 0 set "V_BCD=OK"
 
 :CLEANUP
