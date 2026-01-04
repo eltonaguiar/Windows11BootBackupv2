@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v25.7 - [DYNAMIC RECONCILIATION + LIVE UPDATE]
+:: MIRACLE BOOT RESTORE v25.8 - [HARD-PATH LOCK + DISM RESOURCE FIX]
 :: =============================================================================
-title Miracle Boot Restore v25.7 - Forensic Master [STABLE]
+title Miracle Boot Restore v25.8 - Forensic Master [STABLE]
 
-set "CV=25.7"
+set "CV=25.8"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v25.7 - [DYNAMIC FOLDER LOCK ACTIVE]
+echo    MIRACLE BOOT RESTORE v25.8 - [FOLDER LOCK VERIFIED]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
-echo [*] STATUS: Resolving Backup Timestamp Mismatch
+echo [*] STATUS: Hard-Locked to 2026-01-03_23-05_FASTBOOT_C
 
 :: 1. AUTO-NETWORKING
 X:\Windows\System32\wpeutil.exe InitializeNetwork >nul 2>&1
@@ -33,23 +33,21 @@ set "CURL=C:\Windows\System32\curl.exe"
 X:\Windows\System32\wpeutil.exe CreatePageFile /path=!TARGET!:\pagefile.sys >nul 2>&1
 
 :: =============================================================================
-:: 4. DYNAMIC FOLDER RECONCILIATION
+:: 4. HARD-PATH BACKUP LOCK
 :: =============================================================================
 set "B_ROOT=C:\MIRACLE_BOOT_FIXER"
-set "BKP="
+set "B_FOLDER=2026-01-03_23-05_FASTBOOT_C"
+set "BKP=!B_ROOT!\!B_FOLDER!"
 
-echo [*] Scanning !B_ROOT! for available backups...
-for /f "delims=" %%F in ('dir /ad /b "!B_ROOT!" ^| findstr "FASTBOOT NUCLEAR"') do (
-    set "BKP=!B_ROOT!\%%F"
-    set "B_FOLDER=%%F"
-)
-
-if not defined BKP (
-    echo [!] ERROR: No backup folders found in !B_ROOT!.
+echo [AUDIT] VERIFYING HARD-LOCKED BACKUP: !BKP!
+if exist "!BKP!" (
+    echo [FOUND] Target folder verified.
+) else (
+    echo [!] ERROR: !B_FOLDER! not found in !B_ROOT!. Check drive mapping!
     pause & exit /b 1
 )
 
-echo [AUDIT] VERIFYING LOCATED BACKUP: !BKP!
+:: Forensic Verification
 set "E_EFI=[MISSING]" & if exist "!BKP!\EFI" set "E_EFI=[FOUND]  "
 set "E_REG=[MISSING]" & if exist "!BKP!\Hives\SYSTEM" set "E_REG=[FOUND]  "
 set "E_CORE=[MISSING]" & if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" set "E_CORE=[FOUND]  "
@@ -64,7 +62,7 @@ echo !E_CORE! WIN_CORE Payload
 :MENU_TOP
 echo.
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v25.7 - TARGET DISK: 3 
+echo    MIRACLE BOOT RESTORE v25.8 - TARGET DISK: 3 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE INJECTION)
@@ -109,8 +107,9 @@ if "!USER_CHOICE!"=="2" (
     copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
 )
 
-echo [*] Restoring EFI & BCD...
+echo [*] Restoring EFI Structure...
 !RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP >nul
+echo [*] Rebuilding BCD Store...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
 :: Promote Boot Entry
@@ -121,7 +120,7 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v25.7 !MODE_STR! Restore Complete from !B_FOLDER!.
+echo [FINISHED] v25.8 !MODE_STR! Restore Complete.
 echo ===========================================================================
 
 :: =============================================================================
@@ -135,12 +134,8 @@ if /i "!UPCH!"=="Y" (
     set "NV=!NV: =!"
     if "!NV!" GTR "!CV!" (
         echo [!] NEW VERSION AVAILABLE: !NV!
-        echo [*] Pulling new version to %temp%\r.cmd...
         !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?v=!RANDOM! -o %temp%\r.cmd
-        echo [OK] Update pulled. You may run %temp%\r.cmd after exiting.
-    ) else (
-        echo [OK] You are running the latest version.
-    )
+        echo [OK] Update pulled to %temp%\r.cmd.
+    ) else ( echo [OK] You are running the latest version. )
 )
-echo [*] Restart the VM now.
 pause
