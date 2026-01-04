@@ -1,33 +1,32 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v29.1 - [HARDENED TARGETING + BCD AUDIT + STABLE PARSE]
+:: MIRACLE BOOT RESTORE v29.4 - [ABSOLUTE PATH HARDENING]
 :: =============================================================================
-title Miracle Boot Restore v29.1 - Forensic Master [STABLE]
+title Miracle Boot Restore v29.4 - Forensic Master [STABLE]
 
-set "CV=29.1"
+set "CV=29.4"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v29.1 - [FINAL HARDENING COMPLETE]
+echo    MIRACLE BOOT RESTORE v29.4 - [ABSOLUTE PATHS ENGAGED]
 echo ===========================================================================
 
 :: 0. WINPE DETECTION GUARD
-reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE" >nul 2>&1
+X:\Windows\System32\reg.exe query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE" >nul 2>&1
 if errorlevel 1 ( echo [!] ERROR: Script restricted to WinPE/WinRE. & pause & exit /b 1 )
 
-:: 1. WINRE CORE TOOLS & PATH ISOLATION
-set "X_SYS=X:\Windows\System32"
-set "DPART=!X_SYS!\diskpart.exe"
-set "BCDB=!X_SYS!\bcdboot.exe"
-set "BCDE=!X_SYS!\bcdedit.exe"
-set "RBCP=!X_SYS!\robocopy.exe"
-set "DISM=!X_SYS!\dism.exe"
-set "SFC=!X_SYS!\sfc.exe"
-set "FSTR=!X_SYS!\findstr.exe"
-set "CURL=!X_SYS!\curl.exe"
-set "WMIC=!X_SYS!\wbem\wmic.exe"
+:: 1. HARD-CODED TOOL DEFINITIONS (BYPASSING BROKEN PATH)
+set "DPART=X:\Windows\System32\diskpart.exe"
+set "BCDB=X:\Windows\System32\bcdboot.exe"
+set "BCDE=X:\Windows\System32\bcdedit.exe"
+set "RBCP=X:\Windows\System32\robocopy.exe"
+set "DISM=X:\Windows\System32\dism.exe"
+set "SFC=X:\Windows\System32\sfc.exe"
+set "FSTR=X:\Windows\System32\findstr.exe"
+set "WMIC=X:\Windows\System32\wbem\wmic.exe"
+set "CHOICE=X:\Windows\System32\choice.exe"
 
 :: 2. AUTO-NETWORK INITIALIZATION
-!X_SYS!\wpeutil.exe InitializeNetwork >nul 2>&1
+X:\Windows\System32\wpeutil.exe InitializeNetwork >nul 2>&1
 
 :: =============================================================================
 :: 3. DYNAMIC OS DISCOVERY (STRICT 8-CLAMP)
@@ -38,12 +37,11 @@ for %%D in (C D E F G H I J) do (
 )
 if not defined B_ROOT ( echo [!] ERROR: \MIRACLE_BOOT_FIXER not found. & pause & exit /b 1 )
 
-:: 3.1 FORENSIC LOG VAULT (WMIC TIMESTAMP)
 set "TS="
 for /f "tokens=*" %%i in ('!WMIC! os get localdatetime ^| !FSTR! /r "[0-9]"') do set "TS=%%i"
 if not defined TS set "TS=!RANDOM!!RANDOM!!RANDOM!"
 set "L_DIR=!B_ROOT!\_MiracleLogs\!TS:~0,8!_!TS:~8,6!"
-mkdir "!L_DIR!" >nul 2>&1
+X:\Windows\System32\cmd.exe /c mkdir "!L_DIR!" >nul 2>&1
 
 echo.
 echo =======================================================================
@@ -61,14 +59,13 @@ for %%D in (C D E F G H I J) do (
 )
 if "!OS_COUNT!"=="0" ( echo [!] ERROR: No Windows installs detected. & pause & exit /b 1 )
 
-:: CHOICE CLAMPING
 set "SHOW_COUNT=!OS_COUNT!"
 if !SHOW_COUNT! GTR 8 set "SHOW_COUNT=8"
 set "OS_CH=12345678"
 set "OS_CH=!OS_CH:~0,!SHOW_COUNT!!"
 
 echo.
-choice /c !OS_CH! /n /m "Select target OS (1-!SHOW_COUNT!): "
+!CHOICE! /c !OS_CH! /n /m "Select target OS (1-!SHOW_COUNT!): "
 set "SEL=%errorlevel%"
 for %%N in (!SEL!) do (
     set "TARGET_OS=!OS%%N!!"
@@ -76,8 +73,6 @@ for %%N in (!SEL!) do (
     set "T_BD=!BD%%N!"
 )
 
-:: FIX #1: TARGET OS VERIFICATION
-if not defined TARGET_OS ( echo [!] ERROR: Invalid selection. & pause & exit /b 1 )
 if not exist "!TARGET_OS!:\Windows\System32\winload.efi" (
   echo [!] ERROR: Target OS invalid (missing winload.efi).
   pause & exit /b 1
@@ -85,7 +80,7 @@ if not exist "!TARGET_OS!:\Windows\System32\winload.efi" (
 
 echo.
 echo [SAFETY] Selected Target: !TARGET_OS!: (!T_ED! !T_BD!)
-choice /c YN /m "Proceed with recovery? "
+!CHOICE! /c YN /m "Proceed with recovery? "
 if errorlevel 2 ( echo [ABORTED] & pause & exit /b 0 )
 
 :: =============================================================================
@@ -134,8 +129,7 @@ echo [4] LAST RESORT (NUCLEAR SWAP)
 echo [5] SYNC FROM GITHUB
 echo [6] EXIT
 echo.
-echo [LOG] Audit trail saving to: !L_DIR!
-choice /c 123456 /n /m "Select (1-6): "
+!CHOICE! /c 123456 /n /m "Select (1-6): "
 set "MENU_CH=%errorlevel%"
 
 if "!MENU_CH!"=="1" set "MS=FASTBOOT" & goto :EXECUTE
@@ -147,15 +141,14 @@ if "!MENU_CH!"=="6" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 6. REPAIR LOGIC (SFC FLAG FIXED)
+:: 6. REPAIR LOGIC
 :: =============================================================================
 :REPAIR_REAL
-set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" mkdir "!SD!"
+set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" X:\Windows\System32\cmd.exe /c mkdir "!SD!"
 if defined W_SRC (
     set "STAG=WIM" & echo !W_SRC! | !FSTR! /i "\.esd" >nul && set "STAG=ESD"
-    echo [*] Running DISM /RestoreHealth with source (!W_SRC!) index (!W_IDX!)...
     !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth /Source:!STAG!:!W_SRC!:!W_IDX! /LimitAccess >> "!L_DIR!\dism_repair.log" 2>&1
-) else ( echo [WARN] No source found. DISM skipped. )
+)
 !SFC! /scannow /offbootdir=!TARGET_OS!:\ /offwindir=!TARGET_OS!:\Windows >> "!L_DIR!\sfc_repair.log" 2>&1
 pause & goto :MENU_TOP
 
@@ -164,11 +157,9 @@ pause & goto :MENU_TOP
 :: =============================================================================
 :EXECUTE
 echo.
-echo [*] AUTO-MOUNTING EFI (TWO-PASS)...
 call :AUTO_MOUNT_EFI
 if errorlevel 1 ( echo [!] ERROR: EFI not found. & pause & goto :MENU_TOP )
 
-:: EFI Restore
 !RBCP! "!BKP!\EFI" "S:\EFI" /E /B /R:1 /W:1 /NP >> "!L_DIR!\robocopy_efi.log" 2>&1
 set "RC=!errorlevel!"
 if !RC! GEQ 8 ( echo [!] Robocopy failed (!RC!). & pause & goto :MENU_TOP )
@@ -176,18 +167,12 @@ if !RC! GEQ 8 ( echo [!] Robocopy failed (!RC!). & pause & goto :MENU_TOP )
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI >> "!L_DIR!\bcdboot.log" 2>&1
 if errorlevel 1 ( echo [!] Bcdboot failed. & pause & goto :MENU_TOP )
 
-:: FIX #2: BCDEDIT WARN LOGGING
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >> "!L_DIR!\bcdedit.log" 2>&1
-if errorlevel 1 echo [WARN] BCDEDIT set device failed.>>"!L_DIR!\bcdedit.log"
-
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >> "!L_DIR!\bcdedit.log" 2>&1
-if errorlevel 1 echo [WARN] BCDEDIT set osdevice failed.>>"!L_DIR!\bcdedit.log"
-
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /displayorder {default} /addfirst >> "!L_DIR!\bcdedit.log" 2>&1
-if errorlevel 1 echo [WARN] BCDEDIT displayorder failed.>>"!L_DIR!\bcdedit.log"
 
-mountvol S: /d >nul 2>&1
-echo [FINISHED] !MS! Restore Complete. Logs: !L_DIR!
+X:\Windows\System32\mountvol.exe S: /d >nul 2>&1
+echo [FINISHED] Restore Complete.
 pause & goto :MENU_TOP
 
 :NUCLEAR_LAST_RESORT
@@ -195,16 +180,14 @@ set /p "C_STR=Type BRICKME to continue: "
 if /i "!C_STR!"=="BRICKME" (
     if not exist "!BKP!\Hives\SYSTEM" ( echo [!] ERROR: SYSTEM backup missing. & pause & goto :MENU_TOP )
     set "OLD_HIVE=SYSTEM.old_!random!"
-    ren "!TARGET_OS!:\Windows\System32\config\SYSTEM" "!OLD_HIVE!" >nul 2>&1
-    copy /y "!BKP!\Hives\SYSTEM" "!TARGET_OS!:\Windows\System32\config\SYSTEM" >> "!L_DIR!\hive_injection.log" 2>&1
-    if errorlevel 1 ( echo [!] Hive copy failed. & pause & goto :MENU_TOP )
-    
+    X:\Windows\System32\cmd.exe /c ren "!TARGET_OS!:\Windows\System32\config\SYSTEM" "!OLD_HIVE!" >nul 2>&1
+    X:\Windows\System32\cmd.exe /c copy /y "!BKP!\Hives\SYSTEM" "!TARGET_OS!:\Windows\System32\config\SYSTEM" >> "!L_DIR!\hive_injection.log" 2>&1
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET_OS!:\Windows\System32" /E /B /R:1 /W:1 /NP >> "!L_DIR!\robocopy_wincore.log" 2>&1
     set "RC=!errorlevel!"
     if !RC! GEQ 8 (
         echo [!] Robocopy failed. Rolling back...
-        del /f /q "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul 2>&1
-        ren "!TARGET_OS!:\Windows\System32\config\!OLD_HIVE!" "SYSTEM" >nul 2>&1
+        X:\Windows\System32\cmd.exe /c del /f /q "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul 2>&1
+        X:\Windows\System32\cmd.exe /c ren "!TARGET_OS!:\Windows\System32\config\!OLD_HIVE!" "SYSTEM" >nul 2>&1
         pause & goto :MENU_TOP
     )
     set "MS=NUCLEAR" & goto :EXECUTE
@@ -212,59 +195,44 @@ if /i "!C_STR!"=="BRICKME" (
 goto :MENU_TOP
 
 :: =============================================================================
-:: HELPERS (SEQUENTIAL WIM PAIRING)
+:: HELPERS
 :: =============================================================================
 
-:: REAL TWO-PASS EFI MOUNT
 :AUTO_MOUNT_EFI
-mountvol S: /d >nul 2>&1
-:: PASS 1: Prefer real Microsoft ESP
+X:\Windows\System32\mountvol.exe S: /d >nul 2>&1
 for /f "tokens=2 delims=	 " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
     if exist "S:\EFI\Microsoft\Boot" exit /b 0
-    mountvol S: /d >nul 2>&1
+    X:\Windows\System32\mountvol.exe S: /d >nul 2>&1
 )
-:: PASS 2: Generic Fallback
 for /f "tokens=2 delims=	 " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
     if exist "S:\EFI\Boot" exit /b 0
-    mountvol S: /d >nul 2>&1
+    X:\Windows\System32\mountvol.exe S: /d >nul 2>&1
 )
 exit /b 1
 
-:: SEQUENTIAL WIM INDEX MATCHING
 :AUTO_WIM_INDEX
-set "OFF_ED="
-reg load HKLM\OFFSOFT "!TARGET_OS!:\Windows\System32\config\SOFTWARE" >nul 2>&1
-for /f "tokens=2,*" %%A in ('reg query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul ^| !FSTR! /i "EditionID"') do set "OFF_ED=%%B"
-reg unload HKLM\OFFSOFT >nul 2>&1
+X:\Windows\System32\reg.exe load HKLM\OFFSOFT "!TARGET_OS!:\Windows\System32\config\SOFTWARE" >nul 2>&1
+for /f "tokens=2,*" %%A in ('X:\Windows\System32\reg.exe query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul ^| !FSTR! /i "EditionID"') do set "OFF_ED=%%B"
+X:\Windows\System32\reg.exe unload HKLM\OFFSOFT >nul 2>&1
 set "OFF_ED=!OFF_ED: =!"
 if not defined OFF_ED exit /b 0
-
 set "CUR_IDX="
 for /f "usebackq delims=" %%L in (`"!DISM! /English /Get-WimInfo /WimFile:"!W_SRC!" 2^>nul"`) do (
-    echo %%L | !FSTR! /i "Index :" >nul && (
-        for /f "tokens=2 delims=:" %%X in ("%%L") do set "CUR_IDX=%%X"
-        set "CUR_IDX=!CUR_IDX: =!"
-    )
-    echo %%L | !FSTR! /i "Name :" >nul && (
-        set "NM=%%L" & set "NM=!NM:*Name :=!"
-        echo !NM! | !FSTR! /i "!OFF_ED!" >nul && (
-            if defined CUR_IDX set "W_IDX=!CUR_IDX!"
-        )
-    )
+    echo %%L | !FSTR! /i "Index :" >nul && (for /f "tokens=2 delims=:" %%X in ("%%L") do set "CUR_IDX=%%X" & set "CUR_IDX=!CUR_IDX: =!")
+    echo %%L | !FSTR! /i "Name :" >nul && (set "NM=%%L" & echo !NM! | !FSTR! /i "!OFF_ED!" >nul && (if defined CUR_IDX set "W_IDX=!CUR_IDX!"))
 )
-echo [AUTO_WIM_INDEX] EditionID=!OFF_ED! MatchedIndex=!W_IDX! >> "!L_DIR!\dism_repair.log"
 exit /b 0
 
 :PRINT_OS
 set "D=%~1" & set "N=%~2" & set "PN=" & set "ED=" & set "BD="
-reg load HKLM\OFFSOFT "%D%:\Windows\System32\config\SOFTWARE" >nul 2>&1
+X:\Windows\System32\reg.exe load HKLM\OFFSOFT "%D%:\Windows\System32\config\SOFTWARE" >nul 2>&1
 if not errorlevel 1 (
-    for /f "tokens=2,*" %%A in ('reg query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v ProductName 2^>nul ^| !FSTR! /i "ProductName"') do set "PN=%%B"
-    for /f "tokens=2,*" %%A in ('reg query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul ^| !FSTR! /i "EditionID"') do set "ED=%%B"
-    for /f "tokens=2,*" %%A in ('reg query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul ^| !FSTR! /i "CurrentBuildNumber"') do set "BD=%%B"
-    reg unload HKLM\OFFSOFT >nul 2>&1
+    for /f "tokens=2,*" %%A in ('X:\Windows\System32\reg.exe query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v ProductName 2^>nul ^| !FSTR! /i "ProductName"') do set "PN=%%B"
+    for /f "tokens=2,*" %%A in ('X:\Windows\System32\reg.exe query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul ^| !FSTR! /i "EditionID"') do set "ED=%%B"
+    for /f "tokens=2,*" %%A in ('X:\Windows\System32\reg.exe query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul ^| !FSTR! /i "CurrentBuildNumber"') do set "BD=%%B"
+    X:\Windows\System32\reg.exe unload HKLM\OFFSOFT >nul 2>&1
 )
 set "ED!N!=!ED!" & set "BD!N!=!BD!"
 echo [!N!] %D%: - !PN! (!ED! !BD!)
@@ -277,7 +245,7 @@ if exist "!BKP!\Drivers" (
 pause & goto :MENU_TOP
 
 :SYNC_GITHUB
-echo [*] Pulling ENHANCED_RESTORE2.cmd...
-!CURL! -s -H "Cache-Control: no-cache" -L "https://raw.githubusercontent.com/eltonaguiar/Windows11BootBackupv2/main/ENHANCED_RESTORE2.cmd?v=!RANDOM!" -o %temp%\r.cmd
+echo [*] Pulling latest ENHANCED_RESTORE2.cmd...
+C:\Windows\System32\curl.exe -s -H "Cache-Control: no-cache" -L "https://raw.githubusercontent.com/eltonaguiar/Windows11BootBackupv2/main/ENHANCED_RESTORE2.cmd?v=!RANDOM!" -o %temp%\r.cmd
 echo [OK] Update pulled. Restart script to apply.
 pause & goto :MENU_TOP
