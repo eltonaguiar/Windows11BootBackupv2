@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v29.0 - [TWO-PASS EFI + SEQUENTIAL WIM MATCH]
+:: MIRACLE BOOT RESTORE v29.1 - [HARDENED TARGETING + BCD AUDIT + STABLE PARSE]
 :: =============================================================================
-title Miracle Boot Restore v29.0 - Forensic Master [STABLE]
+title Miracle Boot Restore v29.1 - Forensic Master [STABLE]
 
-set "CV=29.0"
+set "CV=29.1"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v29.0 - [FINAL HARDENING COMPLETE]
+echo    MIRACLE BOOT RESTORE v29.1 - [FINAL HARDENING COMPLETE]
 echo ===========================================================================
 
 :: 0. WINPE DETECTION GUARD
@@ -76,7 +76,13 @@ for %%N in (!SEL!) do (
     set "T_BD=!BD%%N!"
 )
 
+:: FIX #1: TARGET OS VERIFICATION
 if not defined TARGET_OS ( echo [!] ERROR: Invalid selection. & pause & exit /b 1 )
+if not exist "!TARGET_OS!:\Windows\System32\winload.efi" (
+  echo [!] ERROR: Target OS invalid (missing winload.efi).
+  pause & exit /b 1
+)
+
 echo.
 echo [SAFETY] Selected Target: !TARGET_OS!: (!T_ED! !T_BD!)
 choice /c YN /m "Proceed with recovery? "
@@ -170,9 +176,15 @@ if !RC! GEQ 8 ( echo [!] Robocopy failed (!RC!). & pause & goto :MENU_TOP )
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI >> "!L_DIR!\bcdboot.log" 2>&1
 if errorlevel 1 ( echo [!] Bcdboot failed. & pause & goto :MENU_TOP )
 
+:: FIX #2: BCDEDIT WARN LOGGING
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >> "!L_DIR!\bcdedit.log" 2>&1
+if errorlevel 1 echo [WARN] BCDEDIT set device failed.>>"!L_DIR!\bcdedit.log"
+
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >> "!L_DIR!\bcdedit.log" 2>&1
+if errorlevel 1 echo [WARN] BCDEDIT set osdevice failed.>>"!L_DIR!\bcdedit.log"
+
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /displayorder {default} /addfirst >> "!L_DIR!\bcdedit.log" 2>&1
+if errorlevel 1 echo [WARN] BCDEDIT displayorder failed.>>"!L_DIR!\bcdedit.log"
 
 mountvol S: /d >nul 2>&1
 echo [FINISHED] !MS! Restore Complete. Logs: !L_DIR!
@@ -207,13 +219,13 @@ goto :MENU_TOP
 :AUTO_MOUNT_EFI
 mountvol S: /d >nul 2>&1
 :: PASS 1: Prefer real Microsoft ESP
-for /f "tokens=2 delims= " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
+for /f "tokens=2 delims=	 " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
     if exist "S:\EFI\Microsoft\Boot" exit /b 0
     mountvol S: /d >nul 2>&1
 )
 :: PASS 2: Generic Fallback
-for /f "tokens=2 delims= " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
+for /f "tokens=2 delims=	 " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
     if exist "S:\EFI\Boot" exit /b 0
     mountvol S: /d >nul 2>&1
