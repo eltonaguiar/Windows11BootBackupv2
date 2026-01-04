@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.4 - GEMINI EDITION
-:: [LINEAR LOGIC FIX / DISM REPAIR / EFI OVERRIDE]
+:: MIRACLE BOOT RESTORE v30.5 - GEMINI EDITION
+:: [DISM ERROR 32 FIX / LINEAR LOGIC / EFI ATTRIBUTE OVERRIDE]
 :: =============================================================================
-title Miracle Boot Restore v30.4 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.5 - GEMINI EDITION [STABLE]
 
-set "CV=30.4 - GEMINI EDITION"
+set "CV=30.5 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.4 - [LINEAR EXECUTION ENGINE ACTIVE]
+echo    MIRACLE BOOT RESTORE v30.5 - [HARDENED REPAIR ENGINE ACTIVE]
 echo ===========================================================================
 
 :: 1. CORE TOOLS (Absolute Paths)
@@ -51,9 +51,7 @@ for %%N in (!SEL!) do (
 )
 if not defined TARGET_OS ( echo [!] Invalid selection. & goto :OS_PICK )
 
-:: =============================================================================
-:: 3. BRUTE-FORCE BACKUP & MEDIA DISCOVERY
-:: =============================================================================
+:: 3. BACKUP DISCOVERY (Jan 4, 2026 pattern)
 set "BKP=" & set "B_FOLDER="
 set "T_LET=!TARGET_OS::=!"
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
@@ -70,7 +68,7 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
 echo [!] ERROR: No backup found. & pause & exit /b 1
 :BKP_FOUND
 
-:: INSTALL MEDIA DETECTION FOR DISM REPAIR
+:: INSTALL MEDIA DETECTION
 set "W_SRC=" & set "W_IDX=1"
 for %%D in (C D E F G H I J K) do (
     if exist "%%D:\sources\install.wim" set "W_SRC=%%D:\sources\install.wim" & goto :W_READY
@@ -80,7 +78,7 @@ for %%D in (C D E F G H I J K) do (
 if defined W_SRC call :AUTO_WIM_INDEX
 
 :: =============================================================================
-:: 4. REPAIR MENU
+:: 4. REPAIR MENU (PURE LINEAR)
 :: =============================================================================
 :MENU_TOP
 echo.
@@ -103,31 +101,44 @@ if "!M_SEL!"=="5" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 5. DISM REPAIR (LINEAR LOGIC FIX)
+:: 5. HARDENED DISM LOGIC (FIXING ERROR 32 & SYNTAX CRASH)
 :: =============================================================================
 :REPAIR_REAL
-set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" mkdir "!SD!"
+:: FIX ERROR 32: Use a unique, local scratch directory on the target OS
+set "SD=!TARGET_OS!:\_DISM_REPAIR"
+if exist "!SD!" rd /s /q "!SD!"
+mkdir "!SD!"
+
 if not defined W_SRC goto :DISM_NO_SOURCE
 
-:: Use WIM or ESD staging
+:: Identify Media Type
 set "STAG=WIM"
 echo !W_SRC! | findstr /i "\.esd" >nul && set "STAG=ESD"
 
-echo [*] Running DISM /RestoreHealth with source...
+echo [*] DISM: /RestoreHealth (Source: !W_SRC! Index: !W_IDX!)...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth /Source:!STAG!:!W_SRC!:!W_IDX! /LimitAccess
-goto :SFC_ONLY
+goto :SFC_STEP
 
 :DISM_NO_SOURCE
 echo [WARN] No media detected. Running DISM without source...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth
 
-:SFC_ONLY
-echo [*] Running SFC Integrity Check...
+:SFC_STEP
+echo [*] SFC: System File Integrity Check...
 !SFC! /scannow /offbootdir=!TARGET_OS!:\ /offwindir=!TARGET_OS!:\Windows
 pause & goto :MENU_TOP
 
+:DRIVER_RESTORE
+set "SD=!TARGET_OS!:\_DISM_DRIVERS"
+if exist "!SD!" rd /s /q "!SD!"
+mkdir "!SD!"
+if not exist "!BKP!\Drivers" ( echo [!] Drivers folder missing. & pause & goto :MENU_TOP )
+echo [*] DISM: Injecting Drivers from backup...
+!DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Add-Driver /Driver:"!BKP!\Drivers" /Recurse
+pause & goto :MENU_TOP
+
 :: =============================================================================
-:: 6. ATOMIC EXECUTION (EFI ATTRIBUTE OVERRIDE)
+:: 6. ATOMIC EXECUTION (ATTRIBUTE OVERRIDE)
 :: =============================================================================
 :EXECUTE
 echo [*] SCANNING AND UNLOCKING EFI...
@@ -145,7 +156,6 @@ for /L %%V in (0,1,20) do (
 echo [!] ERROR: Could not find EFI. & pause & goto :MENU_TOP
 
 :MOUNT_OK
-:: Robust Transfer
 !RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
 if errorlevel 8 (
     echo [!] ACCESS DENIED. Attempting physical file deletion...
@@ -188,10 +198,6 @@ if not errorlevel 1 (
 set "ED!N!=!ED!"
 echo [!N!] %D%: - Windows (!ED!)
 exit /b
-
-:DRIVER_RESTORE
-if exist "!BKP!\Drivers" ( !DISM! /Image:!TARGET_OS!:\ /Add-Driver /Driver:"!BKP!\Drivers" /Recurse )
-pause & goto :MENU_TOP
 
 :NUCLEAR
 set /p "C_STR=Type BRICKME to continue: "
