@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v28.9 - [STABLE TIMESTAMPS + SFC FIX + WIM PAIRING]
+:: MIRACLE BOOT RESTORE v29.0 - [TWO-PASS EFI + SEQUENTIAL WIM MATCH]
 :: =============================================================================
-title Miracle Boot Restore v28.9 - Forensic Master [STABLE]
+title Miracle Boot Restore v29.0 - Forensic Master [STABLE]
 
-set "CV=28.9"
+set "CV=29.0"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v28.9 - [HARDENED LOGIC ENGINE ONLINE]
+echo    MIRACLE BOOT RESTORE v29.0 - [FINAL HARDENING COMPLETE]
 echo ===========================================================================
 
 :: 0. WINPE DETECTION GUARD
@@ -38,7 +38,7 @@ for %%D in (C D E F G H I J) do (
 )
 if not defined B_ROOT ( echo [!] ERROR: \MIRACLE_BOOT_FIXER not found. & pause & exit /b 1 )
 
-:: 3.1 BULLETPROOF TIMESTAMP & LOG VAULT
+:: 3.1 FORENSIC LOG VAULT (WMIC TIMESTAMP)
 set "TS="
 for /f "tokens=*" %%i in ('!WMIC! os get localdatetime ^| !FSTR! /r "[0-9]"') do set "TS=%%i"
 if not defined TS set "TS=!RANDOM!!RANDOM!!RANDOM!"
@@ -61,11 +61,9 @@ for %%D in (C D E F G H I J) do (
 )
 if "!OS_COUNT!"=="0" ( echo [!] ERROR: No Windows installs detected. & pause & exit /b 1 )
 
+:: CHOICE CLAMPING
 set "SHOW_COUNT=!OS_COUNT!"
-if !SHOW_COUNT! GTR 8 (
-  echo [WARN] Clamping display to first 8 of !OS_COUNT! installs.
-  set "SHOW_COUNT=8"
-)
+if !SHOW_COUNT! GTR 8 set "SHOW_COUNT=8"
 set "OS_CH=12345678"
 set "OS_CH=!OS_CH:~0,!SHOW_COUNT!!"
 
@@ -79,8 +77,6 @@ for %%N in (!SEL!) do (
 )
 
 if not defined TARGET_OS ( echo [!] ERROR: Invalid selection. & pause & exit /b 1 )
-if not exist "!TARGET_OS!:\Windows\System32\winload.efi" ( echo [!] ERROR: Target OS invalid. & pause & exit /b 1 )
-
 echo.
 echo [SAFETY] Selected Target: !TARGET_OS!: (!T_ED! !T_BD!)
 choice /c YN /m "Proceed with recovery? "
@@ -101,7 +97,6 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
         if "!HAS_ED!!HAS_BD!"=="11" ( set "BKP=!B_ROOT!\%%F" & set "B_FOLDER=%%F" & goto :BKP_FOUND )
     )
 )
-:: Drive letter fallback
 set "T_LET=!TARGET_OS!" & set "T_LET=!T_LET::=!"
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
     echo %%F | !FSTR! /i "_!T_LET!" >nul && ( set "BKP=!B_ROOT!\%%F" & set "B_FOLDER=%%F" & goto :BKP_FOUND )
@@ -152,35 +147,31 @@ goto :MENU_TOP
 set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" mkdir "!SD!"
 if defined W_SRC (
     set "STAG=WIM" & echo !W_SRC! | !FSTR! /i "\.esd" >nul && set "STAG=ESD"
-    echo [*] Running DISM /RestoreHealth with source (!W_SRC!)...
+    echo [*] Running DISM /RestoreHealth with source (!W_SRC!) index (!W_IDX!)...
     !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth /Source:!STAG!:!W_SRC!:!W_IDX! /LimitAccess >> "!L_DIR!\dism_repair.log" 2>&1
 ) else ( echo [WARN] No source found. DISM skipped. )
-:: [FIXED] CORRECT SFC FLAG: /offwindir
 !SFC! /scannow /offbootdir=!TARGET_OS!:\ /offwindir=!TARGET_OS!:\Windows >> "!L_DIR!\sfc_repair.log" 2>&1
 pause & goto :MENU_TOP
 
 :: =============================================================================
-:: 7. ATOMIC EXECUTION ENGINE (BCD LOGGING HARDENED)
+:: 7. ATOMIC EXECUTION ENGINE (TWO-PASS MOUNT)
 :: =============================================================================
 :EXECUTE
 echo.
-echo [*] AUTO-MOUNTING EFI...
+echo [*] AUTO-MOUNTING EFI (TWO-PASS)...
 call :AUTO_MOUNT_EFI
 if errorlevel 1 ( echo [!] ERROR: EFI not found. & pause & goto :MENU_TOP )
 
 :: EFI Restore
-echo [*] Rebuilding boot files...
 !RBCP! "!BKP!\EFI" "S:\EFI" /E /B /R:1 /W:1 /NP >> "!L_DIR!\robocopy_efi.log" 2>&1
 set "RC=!errorlevel!"
-if !RC! GEQ 8 ( echo [!] Robocopy failed. Check logs. & pause & goto :MENU_TOP )
+if !RC! GEQ 8 ( echo [!] Robocopy failed (!RC!). & pause & goto :MENU_TOP )
 
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI >> "!L_DIR!\bcdboot.log" 2>&1
-if errorlevel 1 ( echo [!] Bcdboot failed. Check logs. & pause & goto :MENU_TOP )
+if errorlevel 1 ( echo [!] Bcdboot failed. & pause & goto :MENU_TOP )
 
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >> "!L_DIR!\bcdedit.log" 2>&1
-if errorlevel 1 echo [WARN] bcdedit device failed. >> "!L_DIR!\bcdedit.log"
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >> "!L_DIR!\bcdedit.log" 2>&1
-if errorlevel 1 echo [WARN] bcdedit osdevice failed. >> "!L_DIR!\bcdedit.log"
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /displayorder {default} /addfirst >> "!L_DIR!\bcdedit.log" 2>&1
 
 mountvol S: /d >nul 2>&1
@@ -194,10 +185,12 @@ if /i "!C_STR!"=="BRICKME" (
     set "OLD_HIVE=SYSTEM.old_!random!"
     ren "!TARGET_OS!:\Windows\System32\config\SYSTEM" "!OLD_HIVE!" >nul 2>&1
     copy /y "!BKP!\Hives\SYSTEM" "!TARGET_OS!:\Windows\System32\config\SYSTEM" >> "!L_DIR!\hive_injection.log" 2>&1
+    if errorlevel 1 ( echo [!] Hive copy failed. & pause & goto :MENU_TOP )
+    
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET_OS!:\Windows\System32" /E /B /R:1 /W:1 /NP >> "!L_DIR!\robocopy_wincore.log" 2>&1
     set "RC=!errorlevel!"
     if !RC! GEQ 8 (
-        echo [!] Robocopy failed (!RC!). Rolling back SYSTEM hive...
+        echo [!] Robocopy failed. Rolling back...
         del /f /q "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul 2>&1
         ren "!TARGET_OS!:\Windows\System32\config\!OLD_HIVE!" "SYSTEM" >nul 2>&1
         pause & goto :MENU_TOP
@@ -207,20 +200,27 @@ if /i "!C_STR!"=="BRICKME" (
 goto :MENU_TOP
 
 :: =============================================================================
-:: HELPERS (WIM PAIRING HARDENED)
+:: HELPERS (SEQUENTIAL WIM PAIRING)
 :: =============================================================================
 
+:: REAL TWO-PASS EFI MOUNT
 :AUTO_MOUNT_EFI
 mountvol S: /d >nul 2>&1
+:: PASS 1: Prefer real Microsoft ESP
 for /f "tokens=2 delims= " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
-    if exist "S:\EFI\Microsoft\Boot" ( exit /b 0 )
-    if exist "S:\EFI\Boot" ( exit /b 0 )
+    if exist "S:\EFI\Microsoft\Boot" exit /b 0
+    mountvol S: /d >nul 2>&1
+)
+:: PASS 2: Generic Fallback
+for /f "tokens=2 delims= " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
+    (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
+    if exist "S:\EFI\Boot" exit /b 0
     mountvol S: /d >nul 2>&1
 )
 exit /b 1
 
-:: [FIXED] STABLE INDEX+NAME PAIRING
+:: SEQUENTIAL WIM INDEX MATCHING
 :AUTO_WIM_INDEX
 set "OFF_ED="
 reg load HKLM\OFFSOFT "!TARGET_OS!:\Windows\System32\config\SOFTWARE" >nul 2>&1
@@ -230,7 +230,7 @@ set "OFF_ED=!OFF_ED: =!"
 if not defined OFF_ED exit /b 0
 
 set "CUR_IDX="
-for /f "delims=" %%L in ('!DISM! /English /Get-WimInfo /WimFile:"!W_SRC!" 2^>nul ^| !FSTR! /i "Index :" ^| !FSTR! /i "Name :"') do (
+for /f "usebackq delims=" %%L in (`"!DISM! /English /Get-WimInfo /WimFile:"!W_SRC!" 2^>nul"`) do (
     echo %%L | !FSTR! /i "Index :" >nul && (
         for /f "tokens=2 delims=:" %%X in ("%%L") do set "CUR_IDX=%%X"
         set "CUR_IDX=!CUR_IDX: =!"
