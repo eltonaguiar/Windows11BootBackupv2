@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.1 - GEMINI EDITION
-:: [BRUTE-FORCE PATH DISCOVERY / GHOST WinRE SAFE]
+:: MIRACLE BOOT RESTORE v30.3 - GEMINI EDITION
+:: [DISM REPAIR + EFI ATTR OVERRIDE + GHOST WinRE SAFE]
 :: =============================================================================
-title Miracle Boot Restore v30.1 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.3 - GEMINI EDITION [STABLE]
 
-set "CV=30.1 - GEMINI EDITION"
+set "CV=30.3 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.1 - [DEEP PATH BRUTE-FORCE ACTIVE]
+echo    MIRACLE BOOT RESTORE v30.3 - [DISM COMPONENT REPAIR ACTIVE]
 echo ===========================================================================
 
 :: 1. CORE TOOLS (Absolute Paths)
@@ -19,6 +19,7 @@ set "BCDE=!X_SYS!\bcdedit.exe"
 set "RBCP=!X_SYS!\robocopy.exe"
 set "REG=!X_SYS!\reg.exe"
 set "SFC=!X_SYS!\sfc.exe"
+set "DISM=!X_SYS!\dism.exe"
 
 :: 2. DYNAMIC OS DISCOVERY
 set "B_ROOT="
@@ -50,30 +51,19 @@ for %%N in (!SEL!) do (
 )
 if not defined TARGET_OS ( echo [!] Invalid selection. & goto :OS_PICK )
 
-echo.
-echo [SAFETY] Target: !TARGET_OS!:
-set /p "GO=Proceed? (Y/N): "
-if /i not "!GO!"=="Y" ( echo [ABORTED] & pause & exit /b 0 )
-
 :: =============================================================================
-:: 3. BRUTE-FORCE BACKUP DISCOVERY (No metadata reliance)
+:: 3. BRUTE-FORCE BACKUP & MEDIA DISCOVERY
 :: =============================================================================
 set "BKP=" & set "B_FOLDER="
 set "T_LET=!TARGET_OS::=!"
-
-echo [*] Searching for FASTBOOT_!T_LET! folders...
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
     set "FN=%%F"
-    :: Direct match for your specific folder naming pattern
     if not "!FN:_FASTBOOT_!T_LET!=!"=="!FN!" (
         set "BKP=!B_ROOT!\%%F"
         set "B_FOLDER=%%F"
         goto :BKP_FOUND
     )
 )
-
-:: Emergency Fallback: If naming fails, take the absolute newest folder
-echo [WARN] Direct match failed. Using newest backup folder.
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
     if not "%%F"=="_MiracleLogs" (
         set "BKP=!B_ROOT!\%%F"
@@ -81,55 +71,84 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
         goto :BKP_FOUND
     )
 )
-
-echo [!] ERROR: No usable backup folders found. & pause & exit /b 1
+echo [!] ERROR: No backup found. & pause & exit /b 1
 :BKP_FOUND
-echo [OK] Using Backup: !B_FOLDER!
+
+:: INSTALL MEDIA DETECTION FOR DISM REPAIR
+set "W_SRC=" & set "W_IDX=1"
+for %%D in (C D E F G H I J K) do (
+    if exist "%%D:\sources\install.wim" set "W_SRC=%%D:\sources\install.wim" & goto :W_READY
+    if exist "%%D:\sources\install.esd" set "W_SRC=%%D:\sources\install.esd" & goto :W_READY
+)
+:W_READY
+if defined W_SRC call :AUTO_WIM_INDEX
 
 :: =============================================================================
-:: 4. REPAIR MENU
+:: 4. REPAIR MENU (DISM RE-INTEGRATED)
 :: =============================================================================
 :MENU_TOP
 echo.
 echo ===========================================================================
 echo    !CV! - !B_FOLDER! --^> !TARGET_OS!:
 echo ===========================================================================
-echo [1] FASTBOOT RESTORE (EFI + BCD)
-echo [2] REPAIR (SFC ONLY)
-echo [3] NUCLEAR SWAP (SYSTEM HIVE)
-echo [4] EXIT
+echo [1] FASTBOOT RESTORE (EFI + BCD + ATTR OVERRIDE)
+echo [2] REAL DISM REPAIR (CLEANUP-IMAGE + SFC)
+echo [3] DRIVER INJECTION (DISM ADD-DRIVER)
+echo [4] NUCLEAR SWAP (SYSTEM HIVE)
+echo [5] EXIT
 echo.
 set "M_SEL="
-set /p "M_SEL=Select (1-4): "
+set /p "M_SEL=Select (1-5): "
 if "!M_SEL!"=="1" set "MS=FASTBOOT" & goto :EXECUTE
-if "!M_SEL!"=="2" goto :REPAIR_SFC
-if "!M_SEL!"=="3" goto :NUCLEAR
-if "!M_SEL!"=="4" exit /b
+if "!M_SEL!"=="2" goto :REPAIR_REAL
+if "!M_SEL!"=="3" goto :DRIVER_RESTORE
+if "!M_SEL!"=="4" goto :NUCLEAR
+if "!M_SEL!"=="5" exit /b
 goto :MENU_TOP
 
-:REPAIR_SFC
+:: =============================================================================
+:: 5. DISM REPAIR MODULE
+:: =============================================================================
+:REPAIR_REAL
+set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" mkdir "!SD!"
+if defined W_SRC (
+    set "STAG=WIM" & echo !W_SRC! | findstr /i "\.esd" >nul && set "STAG=ESD"
+    echo [*] Running DISM /RestoreHealth (Source: !W_SRC! Index: !W_IDX!)...
+    !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth /Source:!STAG!:!W_SRC!:!W_IDX! /LimitAccess
+) else (
+    echo [WARN] No Windows ISO/USB detected. Running DISM without source...
+    !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth
+)
+echo [*] Running SFC Integrity Check...
 !SFC! /scannow /offbootdir=!TARGET_OS!:\ /offwindir=!TARGET_OS!:\Windows
 pause & goto :MENU_TOP
 
 :: =============================================================================
-:: 5. ATOMIC EXECUTION (ZERO-PARSING MOUNT)
+:: 6. ATOMIC EXECUTION (ATTRIBUTE OVERRIDE)
 :: =============================================================================
 :EXECUTE
-echo [*] SCANNING FOR EFI PARTITION...
+echo [*] SCANNING AND UNLOCKING EFI...
 mountvol S: /d >nul 2>&1
 for /L %%V in (0,1,20) do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
-    if exist "S:\EFI\Microsoft\Boot" ( echo [OK] Found EFI on Vol %%V. & goto :MOUNT_OK )
-    if exist "S:\EFI\Boot" ( echo [OK] Found EFI on Vol %%V. & goto :MOUNT_OK )
+    if exist "S:\EFI\Microsoft\Boot" (
+        set "E_VOL=%%V"
+        (echo select volume !E_VOL! ^& echo attributes volume clear readonly ^& echo attributes partition clear readonly) | "!DPART!" >nul 2>&1
+        echo [OK] Unlocked EFI on Volume !E_VOL!.
+        goto :MOUNT_OK
+    )
     mountvol S: /d >nul 2>&1
 )
 echo [!] ERROR: Could not find EFI. & pause & goto :MENU_TOP
 
 :MOUNT_OK
-:: Verify backup contents before copy
-if not exist "!BKP!\EFI" ( echo [!] ERROR: Backup EFI folder missing. & pause & goto :MENU_TOP )
+!RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
+if errorlevel 8 (
+    echo [!] ACCESS DENIED. Attempting physical file deletion...
+    del /s /f /q S:\EFI\*.* >nul 2>&1
+    !RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
+)
 
-!RBCP! "!BKP!\EFI" "S:\EFI" /E /B /R:1 /W:1 /NP
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >nul 2>&1
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >nul 2>&1
@@ -142,11 +161,21 @@ pause & goto :MENU_TOP
 :: HELPERS
 :: =============================================================================
 
+:AUTO_WIM_INDEX
+set "MATCH_ED=!T_ED!"
+if /i "!MATCH_ED!"=="Professional" set "MATCH_ED=Pro"
+if /i "!MATCH_ED!"=="Core" set "MATCH_ED=Home"
+set "CUR_IDX="
+for /f "usebackq delims=" %%L in (`"!DISM! /English /Get-WimInfo /WimFile:"!W_SRC!" 2^>nul"`) do (
+    echo %%L | findstr /i "Index :" >nul && (for /f "tokens=2 delims=:" %%X in ("%%L") do set "CUR_IDX=%%X" & set "CUR_IDX=!CUR_IDX: =!")
+    echo %%L | findstr /i "Name :" >nul && (set "NM=%%L" & echo !NM! | findstr /i "!MATCH_ED!" >nul && (if defined CUR_IDX set "W_IDX=!CUR_IDX!"))
+)
+exit /b 0
+
 :PRINT_OS_NATIVE
 set "D=%~1" & set "N=%~2" & set "ED=Unknown"
 !REG! load HKLM\OFFSOFT "%D%:\Windows\System32\config\SOFTWARE" >nul 2>&1
 if not errorlevel 1 (
-    :: Hardened token parsing to handle different REG outputs
     for /f "usebackq tokens=1,2,3*" %%A in (`!REG! query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul`) do (
         if "%%A"=="EditionID" set "ED=%%C"
     )
@@ -155,6 +184,12 @@ if not errorlevel 1 (
 set "ED!N!=!ED!"
 echo [!N!] %D%: - Windows (!ED!)
 exit /b
+
+:DRIVER_RESTORE
+if exist "!BKP!\Drivers" (
+    !DISM! /Image:!TARGET_OS!:\ /Add-Driver /Driver:"!BKP!\Drivers" /Recurse
+) else ( echo [!] No Drivers in backup. )
+pause & goto :MENU_TOP
 
 :NUCLEAR
 set /p "C_STR=Type BRICKME to continue: "
