@@ -1,20 +1,20 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v28.4 - [ENHANCED GITHUB SOURCE + ATOMIC INTEGRITY]
+:: MIRACLE BOOT RESTORE v28.5 - [STRICT TARGET VALIDATION + ATOMIC NUCLEAR]
 :: =============================================================================
-title Miracle Boot Restore v28.4 - Forensic Master [STABLE]
+title Miracle Boot Restore v28.5 - Forensic Master [STABLE]
 
-set "CV=28.4"
+set "CV=28.5"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v28.4 - [SOURCE: ENHANCED_RESTORE2.cmd]
+echo    MIRACLE BOOT RESTORE v28.5 - [OS INTEGRITY ENGINE ONLINE]
 echo ===========================================================================
 
 :: WINPE DETECTION GUARD
 reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE" >nul 2>&1
 if errorlevel 1 ( echo [!] ERROR: Script restricted to WinPE/WinRE. & pause & exit /b 1 )
 
-:: 1. WINRE CORE TOOLS & PATH ISOLATION
+:: 1. WINRE CORE TOOLS
 set "X_SYS=X:\Windows\System32"
 set "DPART=!X_SYS!\diskpart.exe"
 set "BCDB=!X_SYS!\bcdboot.exe"
@@ -69,6 +69,10 @@ for %%N in (!SEL!) do (
     set "T_ED=!ED%%N!"
     set "T_BD=!BD%%N!"
 )
+
+:: 10. TARGET OS HARD-VALIDATION
+if not defined TARGET_OS ( echo [!] ERROR: Invalid selection. & pause & exit /b 1 )
+if not exist "!TARGET_OS!:\Windows\System32\winload.efi" ( echo [!] ERROR: Target OS invalid. & pause & exit /b 1 )
 
 echo.
 echo [SAFETY] Selected Target: !TARGET_OS!: (!T_ED! !T_BD!)
@@ -132,9 +136,6 @@ if "!MENU_CH!"=="5" goto :SYNC_GITHUB
 if "!MENU_CH!"=="6" exit /b
 goto :MENU_TOP
 
-:: =============================================================================
-:: 6. REPAIR & SYNC LOGIC
-:: =============================================================================
 :REPAIR_REAL
 set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" mkdir "!SD!"
 if defined W_SRC (
@@ -151,10 +152,11 @@ echo [OK] Update pulled. Restart script to apply.
 pause & goto :MENU_TOP
 
 :: =============================================================================
-:: 7. ATOMIC EXECUTION ENGINE
+:: 6. ATOMIC EXECUTION ENGINE
 :: =============================================================================
 :EXECUTE
 echo.
+echo [MODE] !MS!
 call :AUTO_MOUNT_EFI
 if errorlevel 1 ( echo [!] ERROR: EFI not found. & pause & goto :MENU_TOP )
 
@@ -172,20 +174,28 @@ if errorlevel 1 ( echo [!] Bcdboot failed. & pause & goto :MENU_TOP )
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >nul 2>&1
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /displayorder {default} /addfirst >nul 2>&1
 mountvol S: /d >nul 2>&1
-echo [FINISHED] Restore Complete.
+echo [FINISHED] !MS! Restore Complete.
 pause & goto :MENU_TOP
 
 :NUCLEAR_LAST_RESORT
 set /p "C_STR=Type BRICKME to continue: "
 if /i "!C_STR!"=="BRICKME" (
+    :: 11. NUCLEAR PAYLOAD HARD-CHECKS
+    if not exist "!BKP!\Hives\SYSTEM" ( echo [!] ERROR: SYSTEM backup missing. & pause & goto :MENU_TOP )
+    if not exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" ( echo [!] ERROR: WIN_CORE incomplete. & pause & goto :MENU_TOP )
+
     set "OLD_HIVE=SYSTEM.old_!random!"
     ren "!TARGET_OS!:\Windows\System32\config\SYSTEM" "!OLD_HIVE!" >nul 2>&1
+    if errorlevel 1 ( echo [!] ERROR: Rename failed. & pause & goto :MENU_TOP )
+
     copy /y "!BKP!\Hives\SYSTEM" "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET_OS!:\Windows\System32" /E /B /R:1 /W:1 /NP >nul
-    if !errorlevel! GEQ 8 (
-        echo [!] robocopy failed. Rolling back SYSTEM hive...
+    set "RC=!errorlevel!"
+    if !RC! GEQ 8 (
+        echo [!] Robocopy WIN_CORE failed (!RC!). Rolling back SYSTEM hive...
         del /f /q "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul 2>&1
         ren "!TARGET_OS!:\Windows\System32\config\!OLD_HIVE!" "SYSTEM" >nul 2>&1
+        pause & goto :MENU_TOP
     )
     set "MS=NUCLEAR" & goto :EXECUTE
 )
