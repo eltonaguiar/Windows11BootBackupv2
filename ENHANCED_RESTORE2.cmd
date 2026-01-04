@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.6 - GEMINI EDITION
-:: [RECURSIVE MEDIA SCAN / DISM ERROR 32 FIX / LINEAR LOGIC]
+:: MIRACLE BOOT RESTORE v30.7 - GEMINI EDITION
+:: [STABLE MEDIA SWEEP / DISM ERROR 32 FIX / LINEAR LOGIC]
 :: =============================================================================
-title Miracle Boot Restore v30.6 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.7 - GEMINI EDITION [STABLE]
 
-set "CV=30.6 - GEMINI EDITION"
+set "CV=30.7 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.6 - [DEEP MEDIA SCAN ENGAGED]
+echo    MIRACLE BOOT RESTORE v30.7 - [STABLE MEDIA SCAN ACTIVE]
 echo ===========================================================================
 
 :: 1. CORE TOOLS (Absolute Paths)
@@ -51,7 +51,7 @@ for %%N in (!SEL!) do (
 )
 if not defined TARGET_OS ( echo [!] Invalid selection. & goto :OS_PICK )
 
-:: 3. BACKUP & RECURSIVE MEDIA DISCOVERY
+:: 3. BACKUP & HARDENED MEDIA SWEEP
 set "BKP=" & set "B_FOLDER="
 set "T_LET=!TARGET_OS::=!"
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
@@ -68,22 +68,21 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
 echo [!] ERROR: No backup found. & pause & exit /b 1
 :BKP_FOUND
 
-:: DEEP RECURSIVE MEDIA SCAN (Finding mounted ISOs)
-echo [*] Deep-scanning drives for repair media (WIM/ESD)...
+:: STABLE MEDIA SWEEP (Replacing crashed FOR /R)
+echo [*] Scanning drives for Windows 11 ISO media...
 set "W_SRC=" & set "W_IDX=1"
 for %%D in (C D E F G H I J K) do (
-    if not defined W_SRC (
-        for /r %%D:\ %%F in (install.wim install.esd) do (
-            if exist "%%F" set "W_SRC=%%F" & goto :W_READY
-        )
-    )
+    if not defined W_SRC if exist "%%D:\sources\install.wim" set "W_SRC=%%D:\sources\install.wim"
+    if not defined W_SRC if exist "%%D:\sources\install.esd" set "W_SRC=%%D:\sources\install.esd"
+    if not defined W_SRC if exist "%%D:\install.wim" set "W_SRC=%%D:\install.wim"
+    if not defined W_SRC if exist "%%D:\install.esd" set "W_SRC=%%D:\install.esd"
 )
 :W_READY
 if defined W_SRC (
     echo [OK] Found Media: !W_SRC!
     call :AUTO_WIM_INDEX
 ) else (
-    echo [WARN] No repair media detected in any directory.
+    echo [WARN] No ISO/Repair media found. DISM will run in limited mode.
 )
 
 :: =============================================================================
@@ -110,7 +109,7 @@ if "!M_SEL!"=="5" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 5. HARDENED DISM LOGIC (LINEAR GATES)
+:: 5. DISM REPAIR (FIXING ERROR 32 & SYNTAX CRASH)
 :: =============================================================================
 :REPAIR_REAL
 set "SD=!TARGET_OS!:\_DISM_SCRATCH"
@@ -127,7 +126,7 @@ echo [*] DISM: /RestoreHealth (Source: !W_SRC! Index: !W_IDX!)...
 goto :SFC_STEP
 
 :DISM_NO_SOURCE
-echo [WARN] ISO/WIM not detected. Running standard DISM repair...
+echo [WARN] No source detected. Running DISM without source...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth
 
 :SFC_STEP
