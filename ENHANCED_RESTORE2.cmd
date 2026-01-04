@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v28.1 - [STABLE MOUNT + DISM DRIVERS + ERROR GUARDS]
+:: MIRACLE BOOT RESTORE v28.3 - [RC VALIDATION + CLAMP FIX + ATOMIC ROLLBACK]
 :: =============================================================================
-title Miracle Boot Restore v28.1 - Forensic Master [STABLE]
+title Miracle Boot Restore v28.3 - Forensic Master [STABLE]
 
-set "CV=28.1"
+set "CV=28.3"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v28.1 - [STRICT INTEGRITY ENGINE ONLINE]
+echo    MIRACLE BOOT RESTORE v28.3 - [LOGIC FINALIZATION ONLINE]
 echo ===========================================================================
 
 :: WINPE DETECTION GUARD
@@ -28,7 +28,7 @@ set "FSTR=!X_SYS!\findstr.exe"
 !X_SYS!\wpeutil.exe InitializeNetwork >nul 2>&1
 
 :: =============================================================================
-:: 3. DYNAMIC OS DISCOVERY
+:: 3. DYNAMIC OS DISCOVERY (STRICT 8-CLAMP)
 :: =============================================================================
 set "BKP_ROOT="
 for %%D in (C D E F G H I J) do (
@@ -51,8 +51,18 @@ for %%D in (C D E F G H I J) do (
     )
 )
 if "!OS_COUNT!"=="0" ( echo [!] ERROR: No Windows installs detected. & pause & exit /b 1 )
+
+:: DYNAMIC CHOICE BUILDING (CLAMPS AT 8)
+set "SHOW_COUNT=!OS_COUNT!"
+if !SHOW_COUNT! GTR 8 (
+  echo [WARN] More than 8 installs detected. Showing first 8 only.
+  set "SHOW_COUNT=8"
+)
+set "OS_CHOICES=12345678"
+set "OS_CHOICES=!OS_CHOICES:~0,%SHOW_COUNT%!"
+
 echo.
-choice /c 12345678 /n /m "Select target OS (1-!OS_COUNT!): "
+choice /c !OS_CHOICES! /n /m "Select target OS (1-!SHOW_COUNT!): "
 set "SEL=%errorlevel%"
 for %%N in (!SEL!) do (
     set "TARGET_OS=!OS%%N!!"
@@ -60,16 +70,17 @@ for %%N in (!SEL!) do (
     set "T_BD=!BD%%N!"
 )
 
+if not defined TARGET_OS ( echo [!] ERROR: Selection failed. & pause & exit /b 1 )
+
 echo.
 echo [SAFETY] Selected Target: !TARGET_OS!: (!T_ED! !T_BD!)
 choice /c YN /m "Proceed with recovery? "
 if errorlevel 2 ( echo [ABORTED] & pause & exit /b 0 )
 
 :: =============================================================================
-:: 4. STABLE METADATA MATCHING (FIXED CROSS-LINE)
+:: 4. STABLE METADATA BACKUP MATCHING
 :: =============================================================================
 set "BKP=" & set "B_FOLDER="
-echo [*] Matching backup by Edition/Build metadata...
 for /f "delims=" %%F in ('dir /ad /b /o-d "!BKP_ROOT!" 2^>nul') do (
     set "M_FILE=!BKP_ROOT!\%%F\OS_ID.txt"
     if exist "!M_FILE!" (
@@ -81,13 +92,20 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!BKP_ROOT!" 2^>nul') do (
         if "!HAS_ED!!HAS_BD!"=="11" ( set "BKP=!BKP_ROOT!\%%F" & set "B_FOLDER=%%F" & goto :BKP_FOUND )
     )
 )
-:: Letter fallback
 set "T_LET=!TARGET_OS!" & set "T_LET=!T_LET::=!"
 for /f "delims=" %%F in ('dir /ad /b /o-d "!BKP_ROOT!" 2^>nul') do (
     echo %%F | !FSTR! /i "_!T_LET!" >nul && ( set "BKP=!BKP_ROOT!\%%F" & set "B_FOLDER=%%F" & goto :BKP_FOUND )
 )
 echo [!] ERROR: No matching backup found. & pause & exit /b 1
 :BKP_FOUND
+
+:: INSTALL MEDIA DETECTION
+set "W_SRC=" & set "W_IDX=1"
+for %%D in (C D E F G H I J K) do (
+    if exist "%%D:\sources\install.wim" set "W_SRC=%%D:\sources\install.wim" & goto :W_READY
+    if exist "%%D:\sources\install.esd" set "W_SRC=%%D:\sources\install.esd" & goto :W_READY
+)
+:W_READY
 
 :: =============================================================================
 :: 5. FORENSIC RESTORE MENU
@@ -114,38 +132,48 @@ if "!MENU_CHOICE!"=="5" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 6. DRIVER RESTORE (DISM-NATIVE)
+:: 6. REPAIR LOGIC (STRICT SOURCE)
 :: =============================================================================
-:DRIVER_RESTORE
-if exist "!BKP!\Drivers" (
-    echo [*] Injecting drivers via DISM Add-Driver...
-    !DISM! /Image:!TARGET_OS!:\ /Add-Driver /Driver:"!BKP!\Drivers" /Recurse
-) else ( echo [!] No Drivers folder found in backup. )
-pause & goto :MENU_TOP
-
 :REPAIR_REAL
 set "SD=!TARGET_OS!:\_SCRATCH" & if not exist "!SD!" mkdir "!SD!"
-!DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth
+if defined W_SRC (
+    set "STAG=WIM" & echo !W_SRC! | !FSTR! /i "\.esd" >nul && set "STAG=ESD"
+    echo [*] Running DISM with source: !W_SRC!
+    !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth /Source:!STAG!:!W_SRC!:!W_IDX! /LimitAccess
+) else (
+    echo [WARN] No install.wim/esd detected. Skipping DISM.
+    echo [HINT] Mount a Windows ISO/USB for DISM /Source repair.
+)
 !SFC! /scannow /offbootdir=!TARGET_OS!:\ /offwindir=!TARGET_OS!:\Windows
 pause & goto :MENU_TOP
 
+:DRIVER_RESTORE
+if exist "!BKP!\Drivers" (
+    !DISM! /Image:!TARGET_OS!:\ /Add-Driver /Driver:"!BKP!\Drivers" /Recurse
+) else ( echo [!] No Drivers in backup. )
+pause & goto :MENU_TOP
+
 :: =============================================================================
-:: 7. EXECUTION ENGINE (VERIFIED SUCCESS)
+:: 7. ATOMIC EXECUTION ENGINE
 :: =============================================================================
 :EXECUTE
 echo.
-echo [*] AUTO-DETECTING EFI SYSTEM PARTITION...
 call :AUTO_MOUNT_EFI
 if errorlevel 1 ( echo [!] ERROR: EFI not found. & pause & goto :MENU_TOP )
 
-:: Backup Integrity Audit
+:: Pre-Flight
 if not exist "!BKP!\EFI\Microsoft" ( echo [!] ERROR: EFI backup missing. & pause & goto :MENU_TOP )
+if "!MS!"=="NUCLEAR" (
+    if not exist "!BKP!\Hives\SYSTEM" ( echo [!] ERROR: Hive missing. & pause & goto :MENU_TOP )
+    if not exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" ( echo [!] ERROR: Payload incomplete. & pause & goto :MENU_TOP )
+)
 
 !RBCP! "!BKP!\EFI" "S:\EFI" /E /B /R:1 /W:1 /NP >nul
-if %errorlevel% GEQ 8 ( echo [!] ERROR: EFI Robocopy failed. & pause & goto :MENU_TOP )
+set "RC=!errorlevel!"
+if !RC! GEQ 8 ( echo [!] Robocopy failed (!RC!). & pause & goto :MENU_TOP )
 
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI >nul
-if errorlevel 1 ( echo [!] ERROR: Bcdboot failed. & pause & goto :MENU_TOP )
+if errorlevel 1 ( echo [!] Bcdboot failed. & pause & goto :MENU_TOP )
 
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >nul 2>&1
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >nul 2>&1
@@ -155,28 +183,32 @@ echo [FINISHED] Restore Complete.
 pause & goto :MENU_TOP
 
 :NUCLEAR_LAST_RESORT
-set /p "CONFIRM=Type BRICKME to continue: "
-if /i "!CONFIRM!"=="BRICKME" (
+set /p "C_STR=Type BRICKME to continue: "
+if /i "!C_STR!"=="BRICKME" (
     set "OLD_HIVE=SYSTEM.old_!random!"
     ren "!TARGET_OS!:\Windows\System32\config\SYSTEM" "!OLD_HIVE!" >nul 2>&1
+    if errorlevel 1 ( echo [!] ERROR: Rename failed. & pause & goto :MENU_TOP )
+    
     copy /y "!BKP!\Hives\SYSTEM" "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET_OS!:\Windows\System32" /E /B /R:1 /W:1 /NP >nul
-    if %errorlevel% GEQ 8 (
-        echo [!] robocopy failed. Rolling back SYSTEM hive...
+    set "RC=!errorlevel!"
+    if !RC! GEQ 8 (
+        echo [!] Robocopy failed. Rolling back SYSTEM hive...
+        del /f /q "!TARGET_OS!:\Windows\System32\config\SYSTEM" >nul 2>&1
         ren "!TARGET_OS!:\Windows\System32\config\!OLD_HIVE!" "SYSTEM" >nul 2>&1
+        pause & goto :MENU_TOP
     )
     set "MS=NUCLEAR" & goto :EXECUTE
 )
 goto :MENU_TOP
 
-:: =============================================================================
 :: HELPER: STABLE AUTO-MOUNT EFI
-:: =============================================================================
 :AUTO_MOUNT_EFI
 mountvol S: /d >nul 2>&1
 for /f "tokens=2 delims= " %%V in ('echo list volume ^| "!DPART!" ^| "!FSTR!" /i "Volume" ^| "!FSTR!" /i "FAT32"') do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
-    if exist "S:\EFI\Microsoft" ( exit /b 0 )
+    if exist "S:\EFI\Microsoft\Boot" ( exit /b 0 )
+    if exist "S:\EFI\Boot" ( exit /b 0 )
     mountvol S: /d >nul 2>&1
 )
 exit /b 1
