@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v25.1 - [MULTI-ENDPOINT UPLINK + LOG TRUNCATION]
+:: MIRACLE BOOT RESTORE v25.3 - [ABSOLUTE COMPONENT INJECTION + DISM FORCE]
 :: =============================================================================
-title Miracle Boot Restore v25.1 - Forensic Master [STABLE]
+title Miracle Boot Restore v25.3 - Forensic Master [STABLE]
 
-set "CV=25.1"
+set "CV=25.3"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v25.1 - [LOG UPLINK ENGINE ONLINE]
+echo    MIRACLE BOOT RESTORE v25.3 - [INJECTION ENGINE ONLINE]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
-echo [*] STATUS: Multi-Endpoint Uplink + Log Truncation Active
+echo [*] STATUS: Absolute Path Injection Active (Fixing Generic BCD Boot Bug)
 
 :: 1. AUTO-NETWORKING
 X:\Windows\System32\wpeutil.exe InitializeNetwork >nul 2>&1
@@ -18,21 +18,31 @@ X:\Windows\System32\wpeutil.exe InitializeNetwork >nul 2>&1
 :: 2. DYNAMIC TOOL DISCOVERY
 set "TARGET=C"
 for %%D in (C D E F G) do if exist "%%D:\Windows\System32\winload.efi" set "TARGET=%%D"
-
 set "SYS=!TARGET!:\Windows\System32"
 set "DPART=!SYS!\diskpart.exe"
-set "DISM=!SYS!\dism.exe"
-set "SFC=!SYS!\sfc.exe"
 set "BCDB=!SYS!\bcdboot.exe"
 set "RBCP=!SYS!\robocopy.exe"
-set "NTPD=!SYS!\notepad.exe"
-set "CURL=!SYS!\curl.exe"
+set "DISM=!SYS!\dism.exe"
 
 :: =============================================================================
-:: 3. RESOURCE BRIDGING (Error 1455 & Scratch Fix)
+:: 3. BACKUP IDENTIFICATION (Locked to your timestamp)
 :: =============================================================================
-set "SD=!TARGET!:\_SCRATCH"
-if not exist "!SD!" mkdir "!SD!"
+set "BKP=C:\MIRACLE_BOOT_FIXER\2026-01-03_19-28_FASTBOOT_C"
+
+echo [AUDIT] VERIFYING SPECIFIC BACKUP: !BKP!
+if not exist "!BKP!" (
+    echo [!] ERROR: Backup folder !BKP! not found. Check drive mapping.
+    pause & exit /b 1
+)
+
+:: Forensic Verification
+set "E_EFI=[MISSING]" & if exist "!BKP!\EFI" set "E_EFI=[FOUND]  "
+set "E_REG=[MISSING]" & if exist "!BKP!\Hives\SYSTEM" set "E_REG=[FOUND]  "
+set "E_CORE=[MISSING]" & if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" set "E_CORE=[FOUND]  "
+
+echo !E_EFI! EFI Boot Structure
+echo !E_REG! Registry System Hive (with Drivers)
+echo !E_CORE! WIN_CORE Payload
 
 :: =============================================================================
 :: 4. RESTORE & REPAIR MENU
@@ -40,57 +50,58 @@ if not exist "!SD!" mkdir "!SD!"
 :MENU_TOP
 echo.
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v25.1 - TARGET DISK: 3 
+echo    MIRACLE BOOT RESTORE v25.3 - TARGET DISK: 3 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
-echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
-echo [3] BRIDGED REPAIR  (OFFLINE SFC + LOCAL DISM)
-echo [4] OPEN FORENSIC LOGS (LOCAL VIEW)
-echo [5] UPLOAD FORENSIC LOGS (CBS.LOG / SrtTrail)
-echo [6] EXIT
+echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE INJECTION)
+echo [3] BRIDGED REPAIR  (FORCE REVERT PENDING ACTIONS)
+echo [4] EXIT
 echo.
-set /p "USER_CHOICE=SELECT MODE (1-6): "
+set /p "USER_CHOICE=SELECT MODE (1-4): "
 
 if "!USER_CHOICE!"=="1" set "MODE_STR=FASTBOOT" & goto :MODE_CONFIRMED
 if "!USER_CHOICE!"=="2" set "MODE_STR=NUCLEAR" & goto :MODE_CONFIRMED
-if "!USER_CHOICE!"=="3" goto :REPAIR_LOCAL
-if "!USER_CHOICE!"=="4" goto :VIEW_LOGS
-if "!USER_CHOICE!"=="5" goto :UPLOAD_LOGS
-if "!USER_CHOICE!"=="6" exit /b
+if "!USER_CHOICE!"=="3" goto :REPAIR_FORCE
+if "!USER_CHOICE!"=="4" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 5. LOG UPLINK ENGINE (Bypasses 404 Errors)
+:: 5. FORCE REPAIR LOGIC (Fixing Error 0xd000012d)
 :: =============================================================================
-:UPLOAD_LOGS
+:REPAIR_FORCE
 echo.
-echo [*] Truncating CBS.log to critical errors only...
-set "C_LOG=!TARGET!:\Windows\Logs\CBS\CBS.log"
-set "T_LOG=%temp%\sfcdetails.txt"
-findstr /c:"[SR]" "!C_LOG!" > "!T_LOG!" 2>nul
-
-echo [*] Attempting Upload to Transfer.sh (Primary)...
-!CURL! --upload-file "!T_LOG!" https://transfer.sh/sfcdetails.txt
-if !errorlevel! neq 0 (
-    echo [!] Transfer.sh failed. Falling back to BashUpload...
-    !CURL! -T "!T_LOG!" https://bashupload.com/sfcdetails.txt
-)
-pause & goto :MENU_TOP
-
-:: =============================================================================
-:: 6. REPAIR & RESTORE LOGIC (Transparent)
-:: =============================================================================
-:VIEW_LOGS
-start !NTPD! "!TARGET!:\Windows\System32\LogFiles\Srt\SrtTrail.txt"
-pause & goto :MENU_TOP
-
-:REPAIR_LOCAL
-echo [*] Executing: !DISM! /Image:!TARGET!:\ /ScratchDir:!SD! /Cleanup-Image /RevertPendingActions
+set "SD=!TARGET!:\_SCRATCH"
+if not exist "!SD!" mkdir "!SD!"
+echo [*] Executing Forced Revert via !SD!...
 !DISM! /Image:!TARGET!:\ /ScratchDir:!SD! /Cleanup-Image /RevertPendingActions
 pause & goto :MENU_TOP
 
+:: =============================================================================
+:: 6. RESTORE LOGIC (Absolute Path Corrected)
+:: =============================================================================
 :MODE_CONFIRMED
-echo [*] Executing: !BCDB! !TARGET!:\Windows /s S: /f UEFI
-!BCDB! !TARGET!:\Windows /s S: /f UEFI >nul
-echo [FINISHED] v25.1 !MODE_STR! Restore Complete.
+echo.
+echo [!] STARTING !MODE_STR! RESTORE CYCLE FROM !BKP!...
+set "MNT=S"
+mountvol !MNT!: /d >nul 2>&1
+(echo select disk 3 ^& echo select partition 1 ^& echo assign letter=!MNT!) | !DPART! >nul 2>&1
+
+if "!USER_CHOICE!"=="2" (
+    echo [*] Injecting WIN_CORE Files (Drivers/System)...
+    !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /B /R:1 /W:1 /NP >nul
+    echo [*] Swapping System Registry Hive...
+    ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
+    copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
+)
+
+:: EFI Reconstruction
+echo [*] Restoring EFI Structure...
+!RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP >nul
+echo [*] Rebuilding BCD Store (Targeting !TARGET!:\Windows)...
+!BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
+
+mountvol !MNT!: /d >nul 2>&1
+echo ===========================================================================
+echo [FINISHED] v25.3 !MODE_STR! Restore Complete.
+echo ===========================================================================
 pause & goto :MENU_TOP
