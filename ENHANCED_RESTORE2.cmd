@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v25.8 - [HARD-PATH LOCK + DISM RESOURCE FIX]
+:: MIRACLE BOOT RESTORE v25.9 - [CACHE-BUSTER + HARD-PATH LOCK]
 :: =============================================================================
-title Miracle Boot Restore v25.8 - Forensic Master [STABLE]
+title Miracle Boot Restore v25.9 - Forensic Master [STABLE]
 
-set "CV=25.8"
+set "CV=25.9"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v25.8 - [FOLDER LOCK VERIFIED]
+echo    MIRACLE BOOT RESTORE v25.9 - [CACHE OVERRIDE ACTIVE]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
 echo [*] STATUS: Hard-Locked to 2026-01-03_23-05_FASTBOOT_C
@@ -33,7 +33,7 @@ set "CURL=C:\Windows\System32\curl.exe"
 X:\Windows\System32\wpeutil.exe CreatePageFile /path=!TARGET!:\pagefile.sys >nul 2>&1
 
 :: =============================================================================
-:: 4. HARD-PATH BACKUP LOCK
+:: 4. HARD-PATH BACKUP LOCK (Correcting v25.7 Failures)
 :: =============================================================================
 set "B_ROOT=C:\MIRACLE_BOOT_FIXER"
 set "B_FOLDER=2026-01-03_23-05_FASTBOOT_C"
@@ -41,13 +41,13 @@ set "BKP=!B_ROOT!\!B_FOLDER!"
 
 echo [AUDIT] VERIFYING HARD-LOCKED BACKUP: !BKP!
 if exist "!BKP!" (
-    echo [FOUND] Target folder verified.
+    echo [FOUND] Target folder verified on !TARGET!:
 ) else (
     echo [!] ERROR: !B_FOLDER! not found in !B_ROOT!. Check drive mapping!
     pause & exit /b 1
 )
 
-:: Forensic Verification
+:: Component Audit
 set "E_EFI=[MISSING]" & if exist "!BKP!\EFI" set "E_EFI=[FOUND]  "
 set "E_REG=[MISSING]" & if exist "!BKP!\Hives\SYSTEM" set "E_REG=[FOUND]  "
 set "E_CORE=[MISSING]" & if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" set "E_CORE=[FOUND]  "
@@ -62,7 +62,7 @@ echo !E_CORE! WIN_CORE Payload
 :MENU_TOP
 echo.
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v25.8 - TARGET DISK: 3 
+echo    MIRACLE BOOT RESTORE v25.9 - TARGET DISK: 3 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE INJECTION)
@@ -120,22 +120,23 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v25.8 !MODE_STR! Restore Complete.
+echo [FINISHED] v25.9 !MODE_STR! Restore Complete.
 echo ===========================================================================
 
 :: =============================================================================
-:: 6. LIVE UPDATE & PULL
+:: 6. LIVE UPDATE & PULL (With Force Override)
 :: =============================================================================
 set /p "UPCH=Attempt to pull latest script version? (Y/N): "
 if /i "!UPCH!"=="Y" (
-    echo [*] Checking bit.ly/4skPgOh for updates...
+    echo [*] Checking bit.ly/4skPgOh with cache override...
     !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?v=!RANDOM! -o %temp%\check.cmd
     for /f "tokens=2 delims=:" %%V in ('type %temp%\check.cmd ^| findstr "CV="') do set "NV=%%V"
     set "NV=!NV: =!"
     if "!NV!" GTR "!CV!" (
         echo [!] NEW VERSION AVAILABLE: !NV!
+        del /f /q %temp%\r.cmd >nul 2>&1
         !CURL! -s -H "Cache-Control: no-cache" -L bit.ly/4skPgOh?v=!RANDOM! -o %temp%\r.cmd
         echo [OK] Update pulled to %temp%\r.cmd.
-    ) else ( echo [OK] You are running the latest version. )
+    ) else ( echo [OK] Latest version !CV! already active. )
 )
 pause
