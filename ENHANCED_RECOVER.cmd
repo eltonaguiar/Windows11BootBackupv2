@@ -1,11 +1,10 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-:: HARDCODED VERSION HEADER
-title Miracle Boot Restore v20.7 - Forensic Final [STABLE]
+:: =============================================================================
+:: MIRACLE BOOT RESTORE v20.8 - HARDCODED VERSION DISPLAY
+:: =============================================================================
+title Miracle Boot Restore v20.8 - Forensic Final [STABLE]
 
-:: =============================================================================
-:: 1. HARDCODED SYSTEM PATHS (WinRE Recovery)
-:: =============================================================================
 set "SYS=%SystemRoot%\System32"
 set "FSTR=%SYS%\findstr.exe"
 set "DPART=%SYS%\diskpart.exe"
@@ -23,13 +22,13 @@ set "V_BOOT=FAIL"
 set "V_BCD=FAIL"
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.7 - FORENSIC MAPPING ENGINE
+echo    MIRACLE BOOT RESTORE v20.8 - FORENSIC SERIAL MAPPING
 echo ===========================================================================
 
 :: =============================================================================
-:: 2. FORENSIC DRIVE DISCOVERY (Windows & Backup)
+:: 2. TARGET & BACKUP DISCOVERY
 :: =============================================================================
-echo [*] VERSION: 20.7
+echo [*] VERSION: 20.8
 echo [*] Searching for Windows Installation...
 set "TARGET="
 for %%D in (C D E F G H I J K L) do if exist "%%D:\Windows\System32\config\SYSTEM" if not defined TARGET set "TARGET=%%D"
@@ -37,34 +36,36 @@ for %%D in (C D E F G H I J K L) do if exist "%%D:\Windows\System32\config\SYSTE
 if not defined TARGET echo [!] ERROR: Windows installation not found! & pause & exit /b 1
 echo [OK] Detected Windows on Drive: !TARGET!:
 
-echo [*] Initializing Deep Backup Search (Scanning C: through L:)...
+echo [*] Scanning C:\MIRACLE_BOOT_FIXER for backups...
 set "BKP="
-for %%D in (C D E F G H I J K L) do (
-    if not defined BKP (
-        echo [LOG] Checking drive %%D: for FASTBOOT/NUCLEAR folders...
-        for /f "delims=" %%F in ('dir /b /ad /s "%%D:\*FASTBOOT*" "%%D:\*NUCLEAR*" 2^>nul') do (
-            if not defined BKP (
-                set "BKP=%%F"
-                echo [OK] Found candidate: "%%F"
-            )
+:: Priority Search for the folder you identified
+for /f "delims=" %%F in ('dir /b /ad /s "C:\MIRACLE_BOOT_FIXER\*FASTBOOT*" "C:\MIRACLE_BOOT_FIXER\*NUCLEAR*" 2^>nul') do if not defined BKP set "BKP=%%F"
+
+if not defined BKP (
+    echo [!] C: scan failed. Initializing Full Deep Search (C: through L:)...
+    for %%D in (C D E F G H I J K L) do (
+        if not defined BKP (
+            echo [LOG] Checking drive %%D: ...
+            for /f "delims=" %%F in ('dir /b /ad /s "%%D:\*FASTBOOT*" "%%D:\*NUCLEAR*" 2^>nul') do if not defined BKP set "BKP=%%F"
         )
     )
 )
 
-if not defined BKP echo [!] ERROR: No backups found on any drive! & pause & exit /b 1
+if not defined BKP echo [!] ERROR: No backups found! & pause & exit /b 1
 echo [OK] Final Backup Path: "!BKP!"
 
 :: =============================================================================
-:: 3. SERIAL-BASED DRIVE MAPPING (Fixes "Volume C not found")
+:: 3. FORENSIC SERIAL MAPPING (Replaces failing DiskPart parsing)
 :: =============================================================================
-echo [*] Mapping !TARGET!: to physical hardware via Volume Serial...
+echo [*] Mapping !TARGET!: to physical hardware via Serial Number...
 set "TDNUM="
 
-:: Get the Serial Number of the Target Drive
+:: Extract Volume Serial Number (e.g., 8E6B-97D5)
 for /f "tokens=5" %%S in ('vol !TARGET!: 2^>nul') do set "TSERIAL=%%S"
 if "!TSERIAL!"=="" echo [!] ERROR: Could not read serial for !TARGET!: & pause & exit /b 1
+echo [LOG] Target Serial: !TSERIAL!
 
-:: Probe DiskPart for the Disk Number matching that Serial
+:: Match Serial to physical Disk Number by probing all disks
 (echo list disk) > "%temp%\dp.txt"
 for /f "tokens=2" %%D in ('!DPART! /s "%temp%\dp.txt" ^| !FSTR! /i "Disk "') do (
     if not defined TDNUM (
@@ -74,22 +75,22 @@ for /f "tokens=2" %%D in ('!DPART! /s "%temp%\dp.txt" ^| !FSTR! /i "Disk "') do 
     )
 )
 
-if not defined TDNUM echo [!] ERROR: Forensic Disk Map Failed. & pause & exit /b 1
+if not defined TDNUM echo [!] ERROR: Forensic Serial Mapping Failed. & pause & exit /b 1
 echo [OK] Target Mapped to Disk !TDNUM!
 
 :: =============================================================================
-:: 4. FIND & MOUNT ESP (GPT TYPE PROBE)
+:: 4. FIND & MOUNT ESP (Partition 1 Check)
 :: =============================================================================
 :FIND_ESP
 set "TPNUM="
 (echo select disk !TDNUM! & echo list partition) > "%temp%\dp.txt"
 !DPART! /s "%temp%\dp.txt" > "%temp%\dp_out.txt"
 
-:: Search for GPT System Type (Standard ESP)
+:: Identify "System" labeled partition (200MB EFI)
 for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| !FSTR! /i "System"') do set "TPNUM=%%P"
 
 if not defined TPNUM (
-    echo [*] Unlabeled ESP detected. Probing partitions...
+    echo [*] Probing unlabeled partitions for boot files...
     for /f "tokens=2" %%P in ('type "%temp%\dp_out.txt" ^| !FSTR! /r /c:"^[ ]*Partition[ ]*[0-9]"') do (
         set "CAND=%%P"
         mountvol !MNT!: /d >nul 2>&1
@@ -105,7 +106,7 @@ mountvol !MNT!: /d >nul 2>&1
 
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.7 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
+echo    MIRACLE BOOT RESTORE v20.8 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD - RECOMMENDED)
 echo [2] ADVANCED RESTORE (EFI + REG + WINCORE - WinRE ONLY)
@@ -116,7 +117,7 @@ if "%CHOICE%"=="2" goto :ADVANCED
 goto :FASTBOOT
 
 :ADVANCED
-echo [*] Neutralizing Target Hive...
+echo [*] Offline Registry Unlock...
 !ATT! -R -S -H "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
 !TAKE! /f "!TARGET!:\Windows\System32\config\SYSTEM" >nul 2>&1
 !ICACLS! "!TARGET!:\Windows\System32\config\SYSTEM" /grant administrators:F >nul 2>&1
@@ -124,7 +125,7 @@ ren "!TARGET!:\Windows\System32\config\SYSTEM" "SYSTEM.old_%random%" >nul 2>&1
 copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
 
 if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" (
-    echo [*] Restoring WINCORE System Files...
+    echo [*] Restoring WINCORE Payloads...
     !RBCP! "!BKP!\WIN_CORE\SYSTEM32" "!TARGET!:\Windows\System32" /E /B /R:1 /W:1 /COPY:DAT /NP /NFL /NDL >nul
 )
 
@@ -143,7 +144,7 @@ if not defined CUR_GUID set "CUR_GUID={default}"
 !BCDE! /store "!STORE!" /set !CUR_GUID! device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set !CUR_GUID! osdevice partition=!TARGET!: >nul 2>&1
 
-:: Verification
+:: Final Verification
 if exist "!MNT!:\EFI\Microsoft\Boot\bootmgfw.efi" set "V_BOOT=OK"
 !BCDE! /store "!STORE!" /enum !CUR_GUID! 2^>nul | !FSTR! /i "partition=!TARGET!:" >nul
 if !errorlevel! equ 0 set "V_BCD=OK"
