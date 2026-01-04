@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.9 - GEMINI EDITION
+:: MIRACLE BOOT RESTORE v31.0 - GEMINI EDITION
 :: [ZERO-EXTERNAL-TOOL DEPENDENCY / PURE NATIVE BATCH]
 :: =============================================================================
-title Miracle Boot Restore v30.9 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v31.0 - GEMINI EDITION [STABLE]
 
-set "CV=30.9 - GEMINI EDITION"
+set "CV=31.0 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.9 - [TOTAL NATIVE ENGINE ONLINE]
+echo    MIRACLE BOOT RESTORE v31.0 - [TOTAL NATIVE ENGINE ONLINE]
 echo ===========================================================================
 
 :: 1. CORE TOOLS (Absolute Paths Only)
