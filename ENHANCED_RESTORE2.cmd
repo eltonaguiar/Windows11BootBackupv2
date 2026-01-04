@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v29.7 - [MINIMAL WinPE COMPATIBILITY ENGINE - FIXED]
+:: MIRACLE BOOT RESTORE v30.001- [MINIMAL WinPE COMPATIBILITY ENGINE - FIXED]
 :: - Robust tool resolution (findstr/choice/wmic)
 :: - Safe Y/N + numeric input fallbacks
 :: - WIM Edition token mapping (Professional->Pro, Core->Home)
@@ -9,7 +9,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
 title Miracle Boot Restore v30.001 - Forensic Master [STABLE] - CHATGPT EDITION
 
-set "CV=29.7"
+set "CV=30.001"
 echo ===========================================================================
 echo    MIRACLE BOOT RESTORE v%CV% - [TOOL FALLBACK ENGINE ONLINE] - CHATGPT EDITION
 echo ===========================================================================
