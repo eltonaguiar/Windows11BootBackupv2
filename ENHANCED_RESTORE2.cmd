@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.5 - GEMINI EDITION
-:: [DISM ERROR 32 FIX / LINEAR LOGIC / EFI ATTRIBUTE OVERRIDE]
+:: MIRACLE BOOT RESTORE v30.6 - GEMINI EDITION
+:: [RECURSIVE MEDIA SCAN / DISM ERROR 32 FIX / LINEAR LOGIC]
 :: =============================================================================
-title Miracle Boot Restore v30.5 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.6 - GEMINI EDITION [STABLE]
 
-set "CV=30.5 - GEMINI EDITION"
+set "CV=30.6 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.5 - [HARDENED REPAIR ENGINE ACTIVE]
+echo    MIRACLE BOOT RESTORE v30.6 - [DEEP MEDIA SCAN ENGAGED]
 echo ===========================================================================
 
 :: 1. CORE TOOLS (Absolute Paths)
@@ -51,7 +51,7 @@ for %%N in (!SEL!) do (
 )
 if not defined TARGET_OS ( echo [!] Invalid selection. & goto :OS_PICK )
 
-:: 3. BACKUP DISCOVERY (Jan 4, 2026 pattern)
+:: 3. BACKUP & RECURSIVE MEDIA DISCOVERY
 set "BKP=" & set "B_FOLDER="
 set "T_LET=!TARGET_OS::=!"
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
@@ -68,17 +68,26 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
 echo [!] ERROR: No backup found. & pause & exit /b 1
 :BKP_FOUND
 
-:: INSTALL MEDIA DETECTION
+:: DEEP RECURSIVE MEDIA SCAN (Finding mounted ISOs)
+echo [*] Deep-scanning drives for repair media (WIM/ESD)...
 set "W_SRC=" & set "W_IDX=1"
 for %%D in (C D E F G H I J K) do (
-    if exist "%%D:\sources\install.wim" set "W_SRC=%%D:\sources\install.wim" & goto :W_READY
-    if exist "%%D:\sources\install.esd" set "W_SRC=%%D:\sources\install.esd" & goto :W_READY
+    if not defined W_SRC (
+        for /r %%D:\ %%F in (install.wim install.esd) do (
+            if exist "%%F" set "W_SRC=%%F" & goto :W_READY
+        )
+    )
 )
 :W_READY
-if defined W_SRC call :AUTO_WIM_INDEX
+if defined W_SRC (
+    echo [OK] Found Media: !W_SRC!
+    call :AUTO_WIM_INDEX
+) else (
+    echo [WARN] No repair media detected in any directory.
+)
 
 :: =============================================================================
-:: 4. REPAIR MENU (PURE LINEAR)
+:: 4. REPAIR MENU
 :: =============================================================================
 :MENU_TOP
 echo.
@@ -101,17 +110,15 @@ if "!M_SEL!"=="5" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 5. HARDENED DISM LOGIC (FIXING ERROR 32 & SYNTAX CRASH)
+:: 5. HARDENED DISM LOGIC (LINEAR GATES)
 :: =============================================================================
 :REPAIR_REAL
-:: FIX ERROR 32: Use a unique, local scratch directory on the target OS
-set "SD=!TARGET_OS!:\_DISM_REPAIR"
+set "SD=!TARGET_OS!:\_DISM_SCRATCH"
 if exist "!SD!" rd /s /q "!SD!"
 mkdir "!SD!"
 
 if not defined W_SRC goto :DISM_NO_SOURCE
 
-:: Identify Media Type
 set "STAG=WIM"
 echo !W_SRC! | findstr /i "\.esd" >nul && set "STAG=ESD"
 
@@ -120,7 +127,7 @@ echo [*] DISM: /RestoreHealth (Source: !W_SRC! Index: !W_IDX!)...
 goto :SFC_STEP
 
 :DISM_NO_SOURCE
-echo [WARN] No media detected. Running DISM without source...
+echo [WARN] ISO/WIM not detected. Running standard DISM repair...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth
 
 :SFC_STEP
@@ -133,7 +140,6 @@ set "SD=!TARGET_OS!:\_DISM_DRIVERS"
 if exist "!SD!" rd /s /q "!SD!"
 mkdir "!SD!"
 if not exist "!BKP!\Drivers" ( echo [!] Drivers folder missing. & pause & goto :MENU_TOP )
-echo [*] DISM: Injecting Drivers from backup...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Add-Driver /Driver:"!BKP!\Drivers" /Recurse
 pause & goto :MENU_TOP
 
@@ -158,7 +164,7 @@ echo [!] ERROR: Could not find EFI. & pause & goto :MENU_TOP
 :MOUNT_OK
 !RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
 if errorlevel 8 (
-    echo [!] ACCESS DENIED. Attempting physical file deletion...
+    echo [!] ACCESS DENIED. Retrying forced deletion...
     del /s /f /q S:\EFI\*.* >nul 2>&1
     !RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
 )
