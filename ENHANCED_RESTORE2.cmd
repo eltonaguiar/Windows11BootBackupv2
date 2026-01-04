@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v24.1 - [ONLINE DISM REPAIR + LOG FORENSICS]
+:: MIRACLE BOOT RESTORE v24.4 - [OS-CROSS-REPAIR + ERROR 1455 FIX]
 :: =============================================================================
-title Miracle Boot Restore v24.1 - Forensic Audit [STABLE]
+title Miracle Boot Restore v24.4 - Forensic Audit [STABLE]
 
-set "CV=24.1"
+set "CV=24.4"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v24.1 - [ONLINE REPAIR ENGINE ONLINE]
+echo    MIRACLE BOOT RESTORE v24.4 - [OS-CROSS-REPAIR ONLINE]
 echo ===========================================================================
 echo [*] CURRENT VERSION: !CV!
-echo [*] STATUS: Online DISM Source + SFC Repair Active
+echo [*] STATUS: OS-Cross-Repair + Pagefile Scaffolding Active
 
 :: 1. AUTO-NETWORKING
 X:\Windows\System32\wpeutil.exe InitializeNetwork >nul 2>&1
@@ -25,24 +25,31 @@ set "BCDE=!SYS!\bcdedit.exe"
 set "DISM=!SYS!\dism.exe"
 set "SFC=!SYS!\sfc.exe"
 set "CURL=!SYS!\curl.exe"
+set "WPEU=X:\Windows\System32\wpeutil.exe"
 
 :: =============================================================================
-:: 3. PRE-BOOT FAILURE AUDIT (Log Scraper)
+:: 3. PRE-BOOT FAILURE AUDIT & OS IDENTIFICATION
 :: =============================================================================
 set "TARGET=C"
 echo.
-echo [FORENSICS] SCRAPING PRIOR BOOT FAILURE LOGS...
+echo [FORENSICS] IDENTIFYING WINDOWS 11 TARGET DRIVE...
 echo ---------------------------------------------------------------------------
+if exist "!TARGET!:\Windows\System32\winload.efi" (
+    echo [FOUND] Windows 11 detected on !TARGET!:
+) else (
+    echo [WARN] Windows 11 not found on C:. Searching for alternative...
+    for %%D in (D E F G) do if exist "%%D:\Windows\System32\winload.efi" set "TARGET=%%D"
+)
+echo [OK] Using !TARGET!: as Repair Environment Host.
+
+:: Scraping Logs for Root Cause
 set "SRT_LOG=!TARGET!:\Windows\System32\LogFiles\Srt\SrtTrail.txt"
 if exist "!SRT_LOG!" (
-    echo [FOUND] SrtTrail.txt detected.
     for /f "usebackq delims=" %%A in ("!SRT_LOG!") do (
         set "LINE=%%A"
         if not "!LINE:Root cause found=!"=="!LINE!" echo    -^> !LINE!
-        if not "!LINE:Repair action:=!"=="!LINE!" echo    -^> !LINE!
     )
 )
-if exist "!TARGET!:\Windows\Minidump\*.dmp" echo [WARN] Minidumps detected.
 echo ---------------------------------------------------------------------------
 
 :: =============================================================================
@@ -67,16 +74,15 @@ set "TDNUM=3"
 :MENU_TOP
 echo.
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v24.1 - TARGET DISK: !TDNUM! 
+echo    MIRACLE BOOT RESTORE v24.4 - TARGET DISK: !TDNUM! 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
-echo [3] FORENSIC REPAIR (OFFLINE SFC + LOCAL DISM)
-echo [4] ONLINE REPAIR   (OFFLINE SFC + ONLINE DISM)
+echo [3] CROSS-REPAIR ENGINE (OFFLINE SFC + LOCAL DISM)
+echo [4] CROSS-REPAIR ENGINE (OFFLINE SFC + ONLINE DISM)
 echo [5] EXIT
 echo.
-set "USER_CHOICE="
-set /p "USER_CHOICE=SELECT MODE (1-4): "
+set /p "USER_CHOICE=SELECT MODE (1-5): "
 
 if "!USER_CHOICE!"=="1" set "MODE_STR=FASTBOOT" & goto :MODE_CONFIRMED
 if "!USER_CHOICE!"=="2" set "MODE_STR=NUCLEAR" & goto :MODE_CONFIRMED
@@ -86,17 +92,25 @@ if "!USER_CHOICE!"=="5" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 6. REPAIR CYCLES
+:: 6. CROSS-REPAIR CYCLES (Resolving Error 1455)
 :: =============================================================================
-:REPAIR_LOCAL
-echo [*] Running Local Forensic Repair...
+:REPAIR_SCAFFOLD
+echo [*] Activating Resource Scaffolding for !TARGET!:...
+!WPEU! CreatePageFile /path=!TARGET!:\pagefile.sys >nul 2>&1
+echo [*] Reverting pending actions to clear blockages...
 !DISM! /Image:!TARGET!:\ /Cleanup-Image /RevertPendingActions >nul 2>&1
+goto :eof
+
+:REPAIR_LOCAL
+call :REPAIR_SCAFFOLD
+echo [*] Executing Local Cross-Repair...
+!DISM! /Image:!TARGET!:\ /Cleanup-Image /StartComponentCleanup
 !SFC! /Scannow /OffBootDir=!TARGET!:\ /OffWinDir=!TARGET!:\Windows
 pause & goto :MENU_TOP
 
 :REPAIR_ONLINE
-echo [*] Initializing Online Forensic Repair...
-echo [*] Attempting to pull repair files from Microsoft Update...
+call :REPAIR_SCAFFOLD
+echo [*] Executing Online Cross-Repair (Microsoft Update)...
 !DISM! /Image:!TARGET!:\ /Cleanup-Image /RestoreHealth
 !SFC! /Scannow /OffBootDir=!TARGET!:\ /OffWinDir=!TARGET!:\Windows
 pause & goto :MENU_TOP
@@ -116,13 +130,11 @@ if "!USER_CHOICE!"=="2" (
     copy /y "!BKP!\Hives\SYSTEM" "!TARGET!:\Windows\System32\config\SYSTEM" >nul
 )
 
-:: =============================================================================
-:: 7. EFI REBUILD + BOOT PROMOTION
-:: =============================================================================
-echo [*] Restoring EFI Structure...
+echo [*] Restoring EFI & BCD...
 !RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP >nul
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
+:: Promote Boot Entry
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -131,11 +143,11 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 (echo select disk !TDNUM! ^& echo select partition 3 ^& echo gpt attributes=0x0000000000000000) | !DPART! >nul 2>&1
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v24.1 !MODE_STR! Restore Complete.
+echo [FINISHED] v24.4 !MODE_STR! Restore Complete.
 echo ===========================================================================
 
 :: =============================================================================
-:: 8. UPDATE CHECK
+:: 7. UPDATE CHECK
 :: =============================================================================
 set /p "UPCH=Check for updates? (Y/N): "
 if /i "!UPCH!"=="Y" (
