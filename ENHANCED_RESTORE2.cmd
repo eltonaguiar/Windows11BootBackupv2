@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v21.2 - [NO-FINDSTR / NO-TIMEOUT EDITION]
+:: MIRACLE BOOT RESTORE v21.3 - [NO-FINDSTR / NO-TIMEOUT EDITION]
 :: =============================================================================
-title Miracle Boot Restore v21.2 - Zero-Dependency [STABLE]
+title Miracle Boot Restore v21.3 - Zero-Dependency [STABLE]
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v21.2 - FORENSIC HARDENED
+echo    MIRACLE BOOT RESTORE v21.3 - FORENSIC HARDENED
 echo ===========================================================================
-echo [*] VERSION: 21.2
+echo [*] VERSION: 21.3
 
 :: 1. AUTO-NETWORKING (REMOVED TIMEOUT)
 echo [*] Initializing WinRE Network Stack...
