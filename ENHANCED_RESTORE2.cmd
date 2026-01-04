@@ -1,9 +1,9 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v20.9 - AUTO-NETWORKING & FORENSIC SERIAL MAPPING
+:: MIRACLE BOOT RESTORE v21.1 - AUTO-NETWORKING & FORENSIC SERIAL MAPPING
 :: =============================================================================
-title Miracle Boot Restore v20.9 - Forensic Final [STABLE]
+title Miracle Boot Restore v21.1 - Forensic Final [STABLE]
 
 :: 1. AUTO-INITIALIZE NETWORK (WinRE Specific)
 echo [*] Initializing WinRE Network Stack...
@@ -28,13 +28,13 @@ set "V_BOOT=FAIL"
 set "V_BCD=FAIL"
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.9 - TARGET: AUTO-MAPPING
+echo    MIRACLE BOOT RESTORE v21.1 - TARGET: AUTO-MAPPING
 echo ===========================================================================
 
 :: =============================================================================
 :: 2. TARGET & BACKUP DISCOVERY (Block-Free Syntax)
 :: =============================================================================
-echo [*] VERSION: 20.9
+echo [*] VERSION: 21.1
 echo [*] Searching for Windows Installation...
 set "TARGET="
 for %%D in (C D E F G H I J K L) do if exist "%%D:\Windows\System32\config\SYSTEM" if not defined TARGET set "TARGET=%%D"
@@ -111,7 +111,7 @@ mountvol !MNT!: /d >nul 2>&1
 
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.9 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
+echo    MIRACLE BOOT RESTORE v21.1 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD - RECOMMENDED)
 echo [2] ADVANCED RESTORE (EFI + REG + WINCORE - WinRE ONLY)
