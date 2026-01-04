@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v21.4 - [NO-FINDSTR / NO-TIMEOUT EDITION]
+:: MIRACLE BOOT RESTORE v21.5 - [NO-FINDSTR / NO-TIMEOUT EDITION]
 :: =============================================================================
-title Miracle Boot Restore v21.4 - Zero-Dependency [STABLE]
+title Miracle Boot Restore v21.5 - Zero-Dependency [STABLE]
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v21.4 - FORENSIC HARDENED
+echo    MIRACLE BOOT RESTORE v21.5 - FORENSIC HARDENED
 echo ===========================================================================
-echo [*] VERSION: 21.4
+echo [*] VERSION: 21.5
 
 :: 1. AUTO-NETWORKING (REMOVED TIMEOUT TO PREVENT CRASH)
 echo [*] Initializing WinRE Network Stack...
@@ -51,7 +51,7 @@ echo [DEBUG] Target Serial: !TSERIAL!
 if "!TSERIAL!"=="" echo [!] ERROR: Serial read failed. & pause & exit /b 1
 
 set "TDNUM="
-:: Probing disks 0-3 using internal batch manipulation
+:: Probing disks using internal batch manipulation to bypass missing findstr
 for %%D in (0 1 2 3) do (
     echo select disk %%D > %temp%\dp.txt
     echo list volume >> %temp%\dp.txt
