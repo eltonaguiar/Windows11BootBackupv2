@@ -1,14 +1,15 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v21.6 - [NUCLEAR RESTORE RE-INTEGRATED]
+:: MIRACLE BOOT RESTORE v21.7 - [VERSION HEADER ENFORCED]
 :: =============================================================================
-title Miracle Boot Restore v21.6 - Nuclear Zero-Dependency [STABLE]
+title Miracle Boot Restore v21.7 - Nuclear Zero-Dependency [STABLE]
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v21.6 - FORENSIC NUCLEAR
+echo    MIRACLE BOOT RESTORE v21.7 - [NUCLEAR RESTORE ONLINE]
 echo ===========================================================================
-echo [*] VERSION: 21.6
+echo [*] CURRENT VERSION: 21.7
+echo [*] STATUS: Hardened Zero-Dependency Mode
 
 :: 1. AUTO-NETWORKING
 echo [*] Initializing WinRE Network Stack...
@@ -34,16 +35,19 @@ set "TARGET=C"
 if not exist C:\Windows\System32\config\SYSTEM set "TARGET=D"
 echo [OK] Detected Windows on Drive: !TARGET!:
 
+:: Hardcoded priority search for your specific backup folder
 set "BKP=C:\MIRACLE_BOOT_FIXER\2026-01-03_23-05_FASTBOOT_C"
 if not exist "!BKP!" (
     for /f "delims=" %%F in ('dir /b /ad /s "!TARGET!:\*FASTBOOT*" 2^>nul') do set "BKP=%%F"
 )
-echo [OK] Using Backup: "!BKP!"
+echo [OK] Using Backup Path: "!BKP!"
 
 :: =============================================================================
 :: 4. SERIAL MAPPING (INTERNAL MATCH - NO FINDSTR)
 :: =============================================================================
 for /f "tokens=5" %%S in ('vol !TARGET!: 2^>nul') do set "TSERIAL=%%S"
+echo [DEBUG] Targeting Serial: !TSERIAL!
+
 set "TDNUM="
 for %%D in (0 1 2 3) do (
     echo select disk %%D > %temp%\dp.txt
@@ -51,14 +55,17 @@ for %%D in (0 1 2 3) do (
     !DPART! /s %temp%\dp.txt > %temp%\dp_out.txt
     for /f "usebackq delims=" %%L in ("%temp%\dp_out.txt") do (
         set "LINE=%%L"
-        if not "!LINE:!TSERIAL!=!"=="!LINE!" set "TDNUM=%%D"
+        if not "!LINE:!TSERIAL!=!"=="!LINE!" (
+            set "TDNUM=%%D"
+            echo [OK] MATCH FOUND: Disk %%D
+        )
     )
 )
 
 if not defined TDNUM set "TDNUM=0"
 
 :: =============================================================================
-:: 5. NUCLEAR MENU (RE-INTEGRATED)
+:: 5. RESTORE MENU
 :: =============================================================================
 echo.
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
@@ -75,7 +82,7 @@ mountvol !MNT!: /d >nul 2>&1
 if "%CHOICE%"=="1" goto :FASTBOOT
 
 :: =============================================================================
-:: 6. ADVANCED NUCLEAR LOGIC
+:: 6. NUCLEAR RESTORE LOGIC
 :: =============================================================================
 :NUCLEAR
 echo [*] Neutralizing Target System Hive...
@@ -94,12 +101,13 @@ if exist "!BKP!\WIN_CORE\SYSTEM32\ntoskrnl.exe" (
 :: 7. EFI & BCD REBUILD
 :: =============================================================================
 :FASTBOOT
-echo [*] Injecting EFI Boot Files...
+echo [*] Restoring EFI Structure...
 !RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP /NFL /NDL >nul
 
 echo [*] Rebuilding BCD Store...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
+:: Using {default} to bypass findstr parsing
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -107,6 +115,6 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] Restore cycle complete. Please Restart the VM.
+echo [FINISHED] v21.7 Restore Cycle Complete. Restart the VM.
 echo ===========================================================================
 pause
