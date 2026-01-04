@@ -1,16 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v21.3 - [NO-FINDSTR / NO-TIMEOUT EDITION]
+:: MIRACLE BOOT RESTORE v21.4 - [NO-FINDSTR / NO-TIMEOUT EDITION]
 :: =============================================================================
-title Miracle Boot Restore v21.3 - Zero-Dependency [STABLE]
+title Miracle Boot Restore v21.4 - Zero-Dependency [STABLE]
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v21.3 - FORENSIC HARDENED
+echo    MIRACLE BOOT RESTORE v21.4 - FORENSIC HARDENED
 echo ===========================================================================
-echo [*] VERSION: 21.3
+echo [*] VERSION: 21.4
 
-:: 1. AUTO-NETWORKING (REMOVED TIMEOUT)
+:: 1. AUTO-NETWORKING (REMOVED TIMEOUT TO PREVENT CRASH)
 echo [*] Initializing WinRE Network Stack...
 wpeutil InitializeNetwork >nul 2>&1
 
@@ -30,51 +30,51 @@ set "BCDE=!SYS!\bcdedit.exe"
 echo [DEBUG] Using System Path: !SYS!
 set "TARGET=C"
 if not exist C:\Windows\System32\config\SYSTEM set "TARGET=D"
-echo [OK] Detected Windows on: !TARGET!:
+echo [OK] Detected Windows on Drive: !TARGET!:
 
+:: Hardcoded priority search for your FASTBOOT_C folder
 set "BKP=C:\MIRACLE_BOOT_FIXER\2026-01-03_23-05_FASTBOOT_C"
 if not exist "!BKP!" (
     echo [!] Hardcoded path failed. Scanning drive...
     for /f "delims=" %%F in ('dir /b /ad /s "!TARGET!:\*FASTBOOT*" 2^>nul') do set "BKP=%%F"
 )
 if not defined BKP echo [!] ERROR: No backups found! & pause & exit /b 1
-echo [OK] Final Backup Path: "!BKP!"
+echo [OK] Using Backup: "!BKP!"
 
 :: =============================================================================
-:: 4. SERIAL MAPPING (FINDSTR-FREE METHOD)
+:: 4. SERIAL MAPPING (INTERNAL STRING MATCH - NO FINDSTR)
 :: =============================================================================
-echo [*] Mapping !TARGET!: via Serial Match...
+echo [*] Mapping !TARGET!: via Forensic Serial Number Match...
 for /f "tokens=5" %%S in ('vol !TARGET!: 2^>nul') do set "TSERIAL=%%S"
 echo [DEBUG] Target Serial: !TSERIAL!
 
+if "!TSERIAL!"=="" echo [!] ERROR: Serial read failed. & pause & exit /b 1
+
 set "TDNUM="
-:: Manually probe disks 0-3 without using findstr
+:: Probing disks 0-3 using internal batch manipulation
 for %%D in (0 1 2 3) do (
     echo select disk %%D > %temp%\dp.txt
     echo list volume >> %temp%\dp.txt
     !DPART! /s %temp%\dp.txt > %temp%\dp_out.txt
     
-    :: Search for serial in output using internal loop instead of findstr
-    for /f "delims=" %%L in (%temp%\dp_out.txt) do (
+    for /f "usebackq delims=" %%L in ("%temp%\dp_out.txt") do (
         set "LINE=%%L"
-        if not "!LINE:!TSERIAL!=!"=="!LINE!" set "TDNUM=%%D"
+        if not "!LINE:!TSERIAL!=!"=="!LINE!" (
+            set "TDNUM=%%D"
+            echo [OK] MATCH FOUND: Disk %%D
+        )
     )
 )
 
 if not defined TDNUM set "TDNUM=0"
-echo [OK] Mapped to Disk !TDNUM!
 
 :: =============================================================================
-:: 5. ESP MOUNTING (HARD-CODED PARTITION 1)
+:: 5. ESP MOUNTING (HARD-CODED PARTITION 1 FALLBACK)
 :: =============================================================================
 set "TPNUM=1"
 set "MNT=S"
 mountvol !MNT!: /d >nul 2>&1
 (echo select disk !TDNUM! & echo select partition !TPNUM! & echo assign letter=!MNT!) | !DPART! >nul 2>&1
-if not exist !MNT!:\EFI (
-    echo [!] Partition 1 failed. Trying Probe...
-    (echo select disk !TDNUM! & echo select partition 2 & echo assign letter=!MNT!) | !DPART! >nul 2>&1
-)
 
 :: =============================================================================
 :: 6. RESTORATION
@@ -82,10 +82,10 @@ if not exist !MNT!:\EFI (
 echo [*] Injecting EFI Files...
 !RBCP! "!BKP!\EFI" "!MNT!:\EFI" /E /R:1 /W:1 /NP /NFL /NDL >nul
 
-echo [*] Rebuilding BCD...
+echo [*] Rebuilding BCD Store...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
-:: Final GUID Set (No Findstr)
+:: Final GUID Set (Using {default} to bypass findstr parsing)
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -93,6 +93,6 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] Restore Complete. Please Restart.
+echo [FINISHED] Restore cycle complete. Please Restart the VM.
 echo ===========================================================================
 pause
