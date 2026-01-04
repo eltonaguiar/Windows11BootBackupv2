@@ -1,14 +1,14 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.7 - GEMINI EDITION
+:: MIRACLE BOOT RESTORE v30.8 - GEMINI EDITION
 :: [STABLE MEDIA SWEEP / DISM ERROR 32 FIX / LINEAR LOGIC]
 :: =============================================================================
-title Miracle Boot Restore v30.7 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.8 - GEMINI EDITION [STABLE]
 
-set "CV=30.7 - GEMINI EDITION"
+set "CV=30.8 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.7 - [STABLE MEDIA SCAN ACTIVE]
+echo    MIRACLE BOOT RESTORE v30.8 - [STABLE MEDIA SCAN ACTIVE]
 echo ===========================================================================
 
 :: 1. CORE TOOLS (Absolute Paths)
