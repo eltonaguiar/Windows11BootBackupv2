@@ -68,7 +68,7 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
 echo [!] ERROR: No backup found. & pause & exit /b 1
 :BKP_FOUND
 
-:: STABLE MEDIA SWEEP (Replacing crashed FOR /R)
+:: STABLE MEDIA SWEEP (Fixed FOR /R syntax error - v30.8)
 echo [*] Scanning drives for Windows 11 ISO media...
 set "W_SRC=" & set "W_IDX=1"
 for %%D in (C D E F G H I J K) do (
