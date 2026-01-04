@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
-title Miracle Boot Restore v20.4 - Deep Discovery [STABLE]
+title Miracle Boot Restore v20.6 - Deep Discovery [STABLE]
 
 :: =============================================================================
 :: 1. HARDCODED SYSTEM PATHS (WinRE Recovery)
@@ -22,7 +22,7 @@ set "V_BOOT=FAIL"
 set "V_BCD=FAIL"
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.4 - DEEP DISCOVERY ENGINE
+echo    MIRACLE BOOT RESTORE v20.6 - DEEP DISCOVERY ENGINE [STABLE]
 echo ===========================================================================
 
 :: =============================================================================
@@ -37,10 +37,10 @@ echo [OK] Detected Windows on Drive: !TARGET!:
 
 echo [*] Initializing Deep Backup Search (Scanning C: through L:)...
 set "BKP="
-:: v20.4 Recursive search across all drives
+:: v20.6 Deep recursive scan to find C:\MIRACLE_BOOT_FIXER contents
 for %%D in (C D E F G H I J K L) do (
     if not defined BKP (
-        echo [*] Scanning drive %%D: for backup folders...
+        echo [LOG] Scanning drive %%D: for folders containing FASTBOOT or NUCLEAR...
         for /f "delims=" %%F in ('dir /b /ad /s "%%D:\*FASTBOOT*" "%%D:\*NUCLEAR*" 2^>nul') do (
             if not defined BKP (
                 set "BKP=%%F"
@@ -52,7 +52,7 @@ for %%D in (C D E F G H I J K L) do (
 
 if not defined BKP (
     echo [!] ERROR: No backups found on any drive!
-    echo [!] Tried searching for folders containing FASTBOOT or NUCLEAR.
+    echo [!] Tried searching for FASTBOOT or NUCLEAR labels.
     pause & exit /b 1
 )
 echo [OK] Final Backup Path: "!BKP!"
@@ -72,7 +72,7 @@ echo [*] PowerShell failed. Probing DiskPart volume table...
 set "TVOL="
 for /f "tokens=2,3,4" %%A in ('type "%temp%\dp_out.txt"') do if /i "%%C"=="!TARGET!" set "TVOL=%%B"
 
-if not defined TVOL echo [!] ERROR: Target Volume !TARGET! not found in DiskPart. & pause & exit /b 1
+if not defined TVOL echo [!] ERROR: Volume !TARGET! not found in DiskPart. & pause & exit /b 1
 
 (echo select volume !TVOL! ^& echo detail volume) | !DPART! > "%temp%\dp_out.txt"
 for /f "tokens=4" %%D in ('type "%temp%\dp_out.txt" ^| !FSTR! /i "Disk ###"') do set "TDNUM=%%D"
@@ -116,9 +116,9 @@ mountvol !MNT!: /d >nul 2>&1
 
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v20.4 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
+echo    MIRACLE BOOT RESTORE v20.6 - TARGET: !TARGET!: (Disk !TDNUM! Part !TPNUM!)
 echo ===========================================================================
-echo [1] FASTBOOT RESTORE (EFI + BCD - WinRE RECOMMENDED)
+echo [1] FASTBOOT RESTORE (EFI + BCD - RECOMMENDED)
 echo [2] ADVANCED RESTORE (EFI + REG + WINCORE - WinRE ONLY)
 echo.
 set /p "CHOICE=Choice: "
