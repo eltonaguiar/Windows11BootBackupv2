@@ -1,15 +1,15 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v22.7 - [MANDATORY MENU + MODE CONFIRMATION]
+:: MIRACLE BOOT RESTORE v22.9 - [CACHE BYPASS + NUCLEAR REBUILD]
 :: =============================================================================
-title Miracle Boot Restore v22.7 - Nuclear Zero-Dependency [STABLE]
+title Miracle Boot Restore v22.9 - Nuclear Zero-Dependency [STABLE]
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v22.7 - [MANDATORY CHOICE ENFORCED]
+echo    MIRACLE BOOT RESTORE v22.9 - [FORCED FRESH LOAD]
 echo ===========================================================================
-echo [*] CURRENT VERSION: 22.7
-echo [*] STATUS: Hard-Stop Mode Confirmation Active
+echo [*] CURRENT VERSION: 22.9
+echo [*] STATUS: Cache-Control Header + Path Wipe Active
 
 :: 1. AUTO-NETWORKING
 wpeutil InitializeNetwork >nul 2>&1
@@ -57,13 +57,13 @@ if not defined TDNUM set "TDNUM=0"
 :MENU_TOP
 cls
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v22.7 - TARGET DISK: !TDNUM! 
+echo    MIRACLE BOOT RESTORE v22.9 - TARGET DISK: !TDNUM! 
 echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
 echo.
 set "USER_CHOICE="
-set /p "USER_CHOICE=SELECT MODE (ENTER 1 OR 2): "
+set /p "USER_CHOICE=SELECT MODE (1 OR 2): "
 
 if "!USER_CHOICE!"=="1" set "MODE_STR=FASTBOOT" & goto :MODE_CONFIRMED
 if "!USER_CHOICE!"=="2" set "MODE_STR=NUCLEAR" & goto :MODE_CONFIRMED
@@ -72,7 +72,6 @@ goto :MENU_TOP
 :MODE_CONFIRMED
 echo.
 echo [!] CONFIRMED: STARTING !MODE_STR! RESTORE CYCLE...
-echo.
 
 :: ESP MOUNTING
 set "TPNUM=1"
@@ -115,6 +114,6 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v22.7 !MODE_STR! Restore Complete. Restart the VM.
+echo [FINISHED] v22.9 !MODE_STR! Restore Complete. Restart the VM.
 echo ===========================================================================
 pause
