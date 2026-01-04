@@ -1,25 +1,22 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v21.7 - [VERSION HEADER ENFORCED]
+:: MIRACLE BOOT RESTORE v22.7 - [MANDATORY MENU + MODE CONFIRMATION]
 :: =============================================================================
-title Miracle Boot Restore v21.7 - Nuclear Zero-Dependency [STABLE]
+title Miracle Boot Restore v22.7 - Nuclear Zero-Dependency [STABLE]
 
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v21.7 - [NUCLEAR RESTORE ONLINE]
+echo    MIRACLE BOOT RESTORE v22.7 - [MANDATORY CHOICE ENFORCED]
 echo ===========================================================================
-echo [*] CURRENT VERSION: 21.7
-echo [*] STATUS: Hardened Zero-Dependency Mode
+echo [*] CURRENT VERSION: 22.7
+echo [*] STATUS: Hard-Stop Mode Confirmation Active
 
 :: 1. AUTO-NETWORKING
-echo [*] Initializing WinRE Network Stack...
 wpeutil InitializeNetwork >nul 2>&1
 
-:: 2. DYNAMIC PATH DISCOVERY
-set "SYS=X:\Windows\System32"
-if not exist X:\Windows\System32\diskpart.exe set "SYS=C:\Windows\System32"
-if not exist !SYS!\diskpart.exe set "SYS=D:\Windows\System32"
-
+:: 2. DYNAMIC TOOL DISCOVERY
+set "SYS=C:\Windows\System32"
+if not exist !SYS!\diskpart.exe set "SYS=X:\Windows\System32"
 set "DPART=!SYS!\diskpart.exe"
 set "RBCP=!SYS!\robocopy.exe"
 set "BCDB=!SYS!\bcdboot.exe"
@@ -33,21 +30,15 @@ set "ICACLS=!SYS!\icacls.exe"
 :: =============================================================================
 set "TARGET=C"
 if not exist C:\Windows\System32\config\SYSTEM set "TARGET=D"
-echo [OK] Detected Windows on Drive: !TARGET!:
-
-:: Hardcoded priority search for your specific backup folder
 set "BKP=C:\MIRACLE_BOOT_FIXER\2026-01-03_23-05_FASTBOOT_C"
 if not exist "!BKP!" (
     for /f "delims=" %%F in ('dir /b /ad /s "!TARGET!:\*FASTBOOT*" 2^>nul') do set "BKP=%%F"
 )
-echo [OK] Using Backup Path: "!BKP!"
 
 :: =============================================================================
 :: 4. SERIAL MAPPING (INTERNAL MATCH - NO FINDSTR)
 :: =============================================================================
 for /f "tokens=5" %%S in ('vol !TARGET!: 2^>nul') do set "TSERIAL=%%S"
-echo [DEBUG] Targeting Serial: !TSERIAL!
-
 set "TDNUM="
 for %%D in (0 1 2 3) do (
     echo select disk %%D > %temp%\dp.txt
@@ -55,34 +46,44 @@ for %%D in (0 1 2 3) do (
     !DPART! /s %temp%\dp.txt > %temp%\dp_out.txt
     for /f "usebackq delims=" %%L in ("%temp%\dp_out.txt") do (
         set "LINE=%%L"
-        if not "!LINE:!TSERIAL!=!"=="!LINE!" (
-            set "TDNUM=%%D"
-            echo [OK] MATCH FOUND: Disk %%D
-        )
+        if not "!LINE:!TSERIAL!=!"=="!LINE!" set "TDNUM=%%D"
     )
 )
-
 if not defined TDNUM set "TDNUM=0"
 
 :: =============================================================================
-:: 5. RESTORE MENU
+:: 5. MANDATORY RESTORE MENU
 :: =============================================================================
-echo.
+:MENU_TOP
+cls
+echo ===========================================================================
+echo    MIRACLE BOOT RESTORE v22.7 - TARGET DISK: !TDNUM! 
+echo ===========================================================================
 echo [1] FASTBOOT RESTORE (EFI + BCD ONLY)
 echo [2] NUCLEAR RESTORE (EFI + REG + WIN_CORE)
 echo.
-set /p "CHOICE=Select Restore Mode: "
+set "USER_CHOICE="
+set /p "USER_CHOICE=SELECT MODE (ENTER 1 OR 2): "
+
+if "!USER_CHOICE!"=="1" set "MODE_STR=FASTBOOT" & goto :MODE_CONFIRMED
+if "!USER_CHOICE!"=="2" set "MODE_STR=NUCLEAR" & goto :MODE_CONFIRMED
+goto :MENU_TOP
+
+:MODE_CONFIRMED
+echo.
+echo [!] CONFIRMED: STARTING !MODE_STR! RESTORE CYCLE...
+echo.
 
 :: ESP MOUNTING
 set "TPNUM=1"
 set "MNT=S"
 mountvol !MNT!: /d >nul 2>&1
-(echo select disk !TDNUM! & echo select partition !TPNUM! & echo assign letter=!MNT!) | !DPART! >nul 2>&1
+(echo select disk !TDNUM! ^& echo select partition !TPNUM! ^& echo assign letter=!MNT!) | !DPART! >nul 2>&1
 
-if "%CHOICE%"=="1" goto :FASTBOOT
+if "!USER_CHOICE!"=="1" goto :FASTBOOT
 
 :: =============================================================================
-:: 6. NUCLEAR RESTORE LOGIC
+:: 6. NUCLEAR RESTORE LOGIC (Registry + WIN_CORE)
 :: =============================================================================
 :NUCLEAR
 echo [*] Neutralizing Target System Hive...
@@ -107,7 +108,6 @@ echo [*] Restoring EFI Structure...
 echo [*] Rebuilding BCD Store...
 !BCDB! !TARGET!:\Windows /s !MNT!: /f UEFI >nul
 
-:: Using {default} to bypass findstr parsing
 set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 !BCDE! /store "!STORE!" /set {default} device partition=!TARGET!: >nul 2>&1
 !BCDE! /store "!STORE!" /set {default} osdevice partition=!TARGET!: >nul 2>&1
@@ -115,6 +115,6 @@ set "STORE=!MNT!:\EFI\Microsoft\Boot\BCD"
 :: CLEANUP
 mountvol !MNT!: /d >nul 2>&1
 echo ===========================================================================
-echo [FINISHED] v21.7 Restore Cycle Complete. Restart the VM.
+echo [FINISHED] v22.7 !MODE_STR! Restore Complete. Restart the VM.
 echo ===========================================================================
 pause
