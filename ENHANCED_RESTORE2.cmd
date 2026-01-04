@@ -1,17 +1,17 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.8 - GEMINI EDITION
-:: [STABLE MEDIA SWEEP / DISM ERROR 32 FIX / LINEAR LOGIC]
+:: MIRACLE BOOT RESTORE v30.9 - GEMINI EDITION
+:: [ZERO-EXTERNAL-TOOL DEPENDENCY / PURE NATIVE BATCH]
 :: =============================================================================
-title Miracle Boot Restore v30.8 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.9 - GEMINI EDITION [STABLE]
 
-set "CV=30.8 - GEMINI EDITION"
+set "CV=30.9 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.8 - [STABLE MEDIA SCAN ACTIVE]
+echo    MIRACLE BOOT RESTORE v30.9 - [TOTAL NATIVE ENGINE ONLINE]
 echo ===========================================================================
 
-:: 1. CORE TOOLS (Absolute Paths)
+:: 1. CORE TOOLS (Absolute Paths Only)
 set "X_SYS=X:\Windows\System32"
 set "DPART=!X_SYS!\diskpart.exe"
 set "BCDB=!X_SYS!\bcdboot.exe"
@@ -51,7 +51,7 @@ for %%N in (!SEL!) do (
 )
 if not defined TARGET_OS ( echo [!] Invalid selection. & goto :OS_PICK )
 
-:: 3. BACKUP & HARDENED MEDIA SWEEP
+:: 3. BACKUP & NATIVE MEDIA SWEEP (NO FINDSTR)
 set "BKP=" & set "B_FOLDER="
 set "T_LET=!TARGET_OS::=!"
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
@@ -68,8 +68,7 @@ for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
 echo [!] ERROR: No backup found. & pause & exit /b 1
 :BKP_FOUND
 
-:: STABLE MEDIA SWEEP (Fixed FOR /R syntax error - v30.8)
-echo [*] Scanning drives for Windows 11 ISO media...
+echo [*] Scanning drives for Windows 11 ISO (Native Sweep)...
 set "W_SRC=" & set "W_IDX=1"
 for %%D in (C D E F G H I J K) do (
     if not defined W_SRC if exist "%%D:\sources\install.wim" set "W_SRC=%%D:\sources\install.wim"
@@ -77,12 +76,11 @@ for %%D in (C D E F G H I J K) do (
     if not defined W_SRC if exist "%%D:\install.wim" set "W_SRC=%%D:\install.wim"
     if not defined W_SRC if exist "%%D:\install.esd" set "W_SRC=%%D:\install.esd"
 )
-:W_READY
 if defined W_SRC (
     echo [OK] Found Media: !W_SRC!
-    call :AUTO_WIM_INDEX
+    call :AUTO_WIM_INDEX_NATIVE
 ) else (
-    echo [WARN] No ISO/Repair media found. DISM will run in limited mode.
+    echo [WARN] No ISO detected. DISM will run in limited mode.
 )
 
 :: =============================================================================
@@ -109,7 +107,7 @@ if "!M_SEL!"=="5" exit /b
 goto :MENU_TOP
 
 :: =============================================================================
-:: 5. DISM REPAIR (FIXING ERROR 32 & SYNTAX CRASH)
+:: 5. NATIVE DISM REPAIR (NO EXTERNAL TOOLS)
 :: =============================================================================
 :REPAIR_REAL
 set "SD=!TARGET_OS!:\_DISM_SCRATCH"
@@ -118,19 +116,21 @@ mkdir "!SD!"
 
 if not defined W_SRC goto :DISM_NO_SOURCE
 
+:: Native extension check
 set "STAG=WIM"
-echo !W_SRC! | findstr /i "\.esd" >nul && set "STAG=ESD"
+set "EXT_CHK=!W_SRC:.esd=!"
+if not "!EXT_CHK!"=="!W_SRC!" set "STAG=ESD"
 
 echo [*] DISM: /RestoreHealth (Source: !W_SRC! Index: !W_IDX!)...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth /Source:!STAG!:!W_SRC!:!W_IDX! /LimitAccess
 goto :SFC_STEP
 
 :DISM_NO_SOURCE
-echo [WARN] No source detected. Running DISM without source...
+echo [WARN] No source. Running standard DISM...
 !DISM! /Image:!TARGET_OS!:\ /ScratchDir:!SD! /Cleanup-Image /RestoreHealth
 
 :SFC_STEP
-echo [*] SFC: System File Integrity Check...
+echo [*] SFC Check...
 !SFC! /scannow /offbootdir=!TARGET_OS!:\ /offwindir=!TARGET_OS!:\Windows
 pause & goto :MENU_TOP
 
@@ -143,27 +143,26 @@ if not exist "!BKP!\Drivers" ( echo [!] Drivers folder missing. & pause & goto :
 pause & goto :MENU_TOP
 
 :: =============================================================================
-:: 6. ATOMIC EXECUTION (ATTRIBUTE OVERRIDE)
+:: 6. ATOMIC EXECUTION (EFI UNLOCK)
 :: =============================================================================
 :EXECUTE
-echo [*] SCANNING AND UNLOCKING EFI...
+echo [*] UNLOCKING EFI...
 mountvol S: /d >nul 2>&1
 for /L %%V in (0,1,20) do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
     if exist "S:\EFI\Microsoft\Boot" (
         set "E_VOL=%%V"
         (echo select volume !E_VOL! ^& echo attributes volume clear readonly ^& echo attributes partition clear readonly) | "!DPART!" >nul 2>&1
-        echo [OK] Unlocked EFI on Volume !E_VOL!.
         goto :MOUNT_OK
     )
     mountvol S: /d >nul 2>&1
 )
-echo [!] ERROR: Could not find EFI. & pause & goto :MENU_TOP
+echo [!] ERROR: No EFI found. & pause & goto :MENU_TOP
 
 :MOUNT_OK
 !RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
 if errorlevel 8 (
-    echo [!] ACCESS DENIED. Retrying forced deletion...
+    echo [!] Lock detected. Retrying forced deletion...
     del /s /f /q S:\EFI\*.* >nul 2>&1
     !RBCP! "!BKP!\EFI" "S:\EFI" /S /E /B /NP /R:1 /W:1 /COPY:DAT
 )
@@ -171,23 +170,31 @@ if errorlevel 8 (
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >nul 2>&1
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >nul 2>&1
-
 mountvol S: /d >nul 2>&1
 echo [FINISHED] Restore Complete.
 pause & goto :MENU_TOP
 
 :: =============================================================================
-:: HELPERS
+:: HELPERS (100% NATIVE)
 :: =============================================================================
 
-:AUTO_WIM_INDEX
+:AUTO_WIM_INDEX_NATIVE
 set "MATCH_ED=!T_ED!"
 if /i "!MATCH_ED!"=="Professional" set "MATCH_ED=Pro"
 if /i "!MATCH_ED!"=="Core" set "MATCH_ED=Home"
 set "CUR_IDX="
+:: Use native delimiter parsing for DISM output (No findstr)
 for /f "usebackq delims=" %%L in (`"!DISM! /English /Get-WimInfo /WimFile:"!W_SRC!" 2^>nul"`) do (
-    echo %%L | findstr /i "Index :" >nul && (for /f "tokens=2 delims=:" %%X in ("%%L") do set "CUR_IDX=%%X" & set "CUR_IDX=!CUR_IDX: =!")
-    echo %%L | findstr /i "Name :" >nul && (set "NM=%%L" & echo !NM! | findstr /i "!MATCH_ED!" >nul && (if defined CUR_IDX set "W_IDX=!CUR_IDX!"))
+    set "LINE=%%L"
+    if not "!LINE:Index :=!"=="!LINE!" (
+        for /f "tokens=2 delims=:" %%X in ("!LINE!") do set "CUR_IDX=%%X"
+        set "CUR_IDX=!CUR_IDX: =!"
+    )
+    if not "!LINE:Name :=!"=="!LINE!" (
+        if not "!LINE:!MATCH_ED!=!"=="!LINE!" (
+            if defined CUR_IDX set "W_IDX=!CUR_IDX!"
+        )
+    )
 )
 exit /b 0
 
