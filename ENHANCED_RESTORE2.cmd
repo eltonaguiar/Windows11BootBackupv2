@@ -1,17 +1,17 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 :: =============================================================================
-:: MIRACLE BOOT RESTORE v30.0 - GEMINI EDITION
-:: [ZERO-PARSING / PURE NATIVE / GHOST WinRE SAFE]
+:: MIRACLE BOOT RESTORE v30.1 - GEMINI EDITION
+:: [BRUTE-FORCE PATH DISCOVERY / GHOST WinRE SAFE]
 :: =============================================================================
-title Miracle Boot Restore v30.0 - GEMINI EDITION [STABLE]
+title Miracle Boot Restore v30.1 - GEMINI EDITION [STABLE]
 
-set "CV=30.0 - GEMINI EDITION"
+set "CV=30.1 - GEMINI EDITION"
 echo ===========================================================================
-echo    MIRACLE BOOT RESTORE v30.0 - [ZERO-DEPENDENCY ENGINE ONLINE]
+echo    MIRACLE BOOT RESTORE v30.1 - [DEEP PATH BRUTE-FORCE ACTIVE]
 echo ===========================================================================
 
-:: 1. CORE REPAIR TOOLS (Hardcoded Absolute Paths)
+:: 1. CORE TOOLS (Absolute Paths)
 set "X_SYS=X:\Windows\System32"
 set "DPART=!X_SYS!\diskpart.exe"
 set "BCDB=!X_SYS!\bcdboot.exe"
@@ -20,7 +20,7 @@ set "RBCP=!X_SYS!\robocopy.exe"
 set "REG=!X_SYS!\reg.exe"
 set "SFC=!X_SYS!\sfc.exe"
 
-:: 2. DYNAMIC OS DISCOVERY (NATIVE SCAN - NO FINDSTR)
+:: 2. DYNAMIC OS DISCOVERY
 set "B_ROOT="
 for %%D in (C D E F G H I J) do (
     if not defined B_ROOT if exist "%%D:\MIRACLE_BOOT_FIXER" set "B_ROOT=%%D:\MIRACLE_BOOT_FIXER"
@@ -33,15 +33,12 @@ set "OS_COUNT=0"
 for %%D in (C D E F G H I J) do (
     if exist "%%D:\Windows\System32\winload.efi" (
         set /a OS_COUNT+=1
-        if !OS_COUNT! LEQ 8 (
-            set "OS!OS_COUNT!=%%D"
-            call :PRINT_OS_NATIVE %%D !OS_COUNT!
-        )
+        set "OS!OS_COUNT!=%%D"
+        call :PRINT_OS_NATIVE %%D !OS_COUNT!
     )
 )
 if "!OS_COUNT!"=="0" ( echo [!] ERROR: No Windows detected. & pause & exit /b 1 )
 
-:: NATIVE SELECTION (No Choice/Findstr)
 :OS_PICK
 set "SEL="
 set /p "SEL=Select OS number (1-!OS_COUNT!): "
@@ -50,40 +47,44 @@ set "TARGET_OS="
 for %%N in (!SEL!) do (
     set "TARGET_OS=!OS%%N!"
     set "T_ED=!ED%%N!"
-    set "T_BD=!BD%%N!"
 )
 if not defined TARGET_OS ( echo [!] Invalid selection. & goto :OS_PICK )
 
 echo.
-echo [SAFETY] Target: !TARGET_OS!: (!T_ED! !T_BD!)
+echo [SAFETY] Target: !TARGET_OS!:
 set /p "GO=Proceed? (Y/N): "
 if /i not "!GO!"=="Y" ( echo [ABORTED] & pause & exit /b 0 )
 
 :: =============================================================================
-:: 3. NATIVE METADATA MATCHING
+:: 3. BRUTE-FORCE BACKUP DISCOVERY (No metadata reliance)
 :: =============================================================================
 set "BKP=" & set "B_FOLDER="
-for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
-    set "M_FILE=!B_ROOT!\%%F\OS_ID.txt"
-    if exist "!M_FILE!" (
-        set "HAS_ED=0" & set "HAS_BD=0"
-        for /f "usebackq delims=" %%L in ("!M_FILE!") do (
-            set "LINE=%%L"
-            :: Substring substitution for matching (No Findstr)
-            if not "!LINE:EditionID=!T_ED!=!"=="!LINE!" set "HAS_ED=1"
-            if not "!LINE:CurrentBuildNumber=!T_BD!=!"=="!LINE!" set "HAS_BD=1"
-        )
-        if "!HAS_ED!!HAS_BD!"=="11" ( set "BKP=!B_ROOT!\%%F" & set "B_FOLDER=%%F" & goto :BKP_FOUND )
-    )
-)
-:: Letter Fallback
 set "T_LET=!TARGET_OS::=!"
+
+echo [*] Searching for FASTBOOT_!T_LET! folders...
 for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
     set "FN=%%F"
-    if not "!FN:_!T_LET!=!"=="!FN!" ( set "BKP=!B_ROOT!\%%F" & set "B_FOLDER=%%F" & goto :BKP_FOUND )
+    :: Direct match for your specific folder naming pattern
+    if not "!FN:_FASTBOOT_!T_LET!=!"=="!FN!" (
+        set "BKP=!B_ROOT!\%%F"
+        set "B_FOLDER=%%F"
+        goto :BKP_FOUND
+    )
 )
-echo [!] ERROR: No matching backup found. & pause & exit /b 1
+
+:: Emergency Fallback: If naming fails, take the absolute newest folder
+echo [WARN] Direct match failed. Using newest backup folder.
+for /f "delims=" %%F in ('dir /ad /b /o-d "!B_ROOT!" 2^>nul') do (
+    if not "%%F"=="_MiracleLogs" (
+        set "BKP=!B_ROOT!\%%F"
+        set "B_FOLDER=%%F"
+        goto :BKP_FOUND
+    )
+)
+
+echo [!] ERROR: No usable backup folders found. & pause & exit /b 1
 :BKP_FOUND
+echo [OK] Using Backup: !B_FOLDER!
 
 :: =============================================================================
 :: 4. REPAIR MENU
@@ -116,20 +117,19 @@ pause & goto :MENU_TOP
 :EXECUTE
 echo [*] SCANNING FOR EFI PARTITION...
 mountvol S: /d >nul 2>&1
-:: Test Volume 0-20 directly (Parsing DiskPart table is too fragile for you)
 for /L %%V in (0,1,20) do (
     (echo select volume %%V ^& echo assign letter=S) | "!DPART!" >nul 2>&1
-    if exist "S:\EFI\Microsoft\Boot" ( echo [OK] Found EFI on Volume %%V. & goto :MOUNT_OK )
-    if exist "S:\EFI\Boot" ( echo [OK] Found Generic EFI on Volume %%V. & goto :MOUNT_OK )
+    if exist "S:\EFI\Microsoft\Boot" ( echo [OK] Found EFI on Vol %%V. & goto :MOUNT_OK )
+    if exist "S:\EFI\Boot" ( echo [OK] Found EFI on Vol %%V. & goto :MOUNT_OK )
     mountvol S: /d >nul 2>&1
 )
-echo [!] ERROR: Could not locate EFI. & pause & goto :MENU_TOP
+echo [!] ERROR: Could not find EFI. & pause & goto :MENU_TOP
 
 :MOUNT_OK
-!RBCP! "!BKP!\EFI" "S:\EFI" /E /B /R:1 /W:1 /NP
-set "RC=!errorlevel!"
-if !RC! GEQ 8 ( echo [!] Robocopy failed. & pause & goto :MENU_TOP )
+:: Verify backup contents before copy
+if not exist "!BKP!\EFI" ( echo [!] ERROR: Backup EFI folder missing. & pause & goto :MENU_TOP )
 
+!RBCP! "!BKP!\EFI" "S:\EFI" /E /B /R:1 /W:1 /NP
 !BCDB! !TARGET_OS!:\Windows /s S: /f UEFI
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} device partition=!TARGET_OS!: >nul 2>&1
 !BCDE! /store "S:\EFI\Microsoft\Boot\BCD" /set {default} osdevice partition=!TARGET_OS!: >nul 2>&1
@@ -139,20 +139,21 @@ echo [FINISHED] Restore Complete.
 pause & goto :MENU_TOP
 
 :: =============================================================================
-:: HELPERS (100% NATIVE BATCH)
+:: HELPERS
 :: =============================================================================
 
 :PRINT_OS_NATIVE
-set "D=%~1" & set "N=%~2" & set "PN=Windows" & set "ED=Unknown" & set "BD=0"
+set "D=%~1" & set "N=%~2" & set "ED=Unknown"
 !REG! load HKLM\OFFSOFT "%D%:\Windows\System32\config\SOFTWARE" >nul 2>&1
 if not errorlevel 1 (
-    :: Native Reg Query parsing using tokens (Safe from Findstr failure)
-    for /f "tokens=3" %%A in ('!REG! query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul') do set "ED=%%A"
-    for /f "tokens=3" %%A in ('!REG! query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v CurrentBuildNumber 2^>nul') do set "BD=%%A"
+    :: Hardened token parsing to handle different REG outputs
+    for /f "usebackq tokens=1,2,3*" %%A in (`!REG! query "HKLM\OFFSOFT\Microsoft\Windows NT\CurrentVersion" /v EditionID 2^>nul`) do (
+        if "%%A"=="EditionID" set "ED=%%C"
+    )
     !REG! unload HKLM\OFFSOFT >nul 2>&1
 )
-set "ED!N!=!ED!" & set "BD!N!=!BD!"
-echo [!N!] %D%: - !PN! (!ED! !BD!)
+set "ED!N!=!ED!"
+echo [!N!] %D%: - Windows (!ED!)
 exit /b
 
 :NUCLEAR
